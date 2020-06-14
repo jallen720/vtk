@@ -203,6 +203,7 @@ CreateVkInstance(cstr AppName, ctk::static_array<cstr, size> *Extensions, ctk::s
     VkInstanceCreateInfo InstanceCreateInfo = {};
     InstanceCreateInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     InstanceCreateInfo.pNext                   = DebugUtilsMessengerCreateInfo;
+    InstanceCreateInfo.flags                   = 0;
     InstanceCreateInfo.pApplicationInfo        = &AppInfo;
     InstanceCreateInfo.enabledLayerCount       = Layers->Count;
     InstanceCreateInfo.ppEnabledLayerNames     = Layers->Data;
@@ -229,11 +230,14 @@ static VkDeviceQueueCreateInfo
 CreateQueueCreateInfo(u32 QueueFamilyIndex)
 {
     static const f32 QUEUE_PRIORITIES[] = { 1.0f };
+
     VkDeviceQueueCreateInfo QueueCreateInfo = {};
-    QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueCreateInfo.flags            = 0;
     QueueCreateInfo.queueFamilyIndex = QueueFamilyIndex;
-    QueueCreateInfo.queueCount = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
+    QueueCreateInfo.queueCount       = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
     QueueCreateInfo.pQueuePriorities = QUEUE_PRIORITIES;
+
     return QueueCreateInfo;
 }
 
@@ -243,6 +247,7 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
     VkImageViewCreateInfo ImageViewCreateInfo = {};
     ImageViewCreateInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     ImageViewCreateInfo.image                           = Image;
+    ImageViewCreateInfo.flags                           = 0;
     ImageViewCreateInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
     ImageViewCreateInfo.format                          = Format;
     ImageViewCreateInfo.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -293,6 +298,7 @@ CreateInstance(instance_config *Config)
         VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {};
         DebugUtilsMessengerCreateInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         DebugUtilsMessengerCreateInfo.pNext           = NULL;
+        DebugUtilsMessengerCreateInfo.flags           = 0;
         DebugUtilsMessengerCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                                                         // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
                                                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -471,12 +477,12 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             FoundSuitableDevice = true;
 
             // Initialize physical device with selected device info.
-            Device.Physical = PhysicalDevice;
-            Device.MemoryProperties = SelectedDeviceInfo.MemoryProperties;
-            Device.GraphicsIndex = SelectedDeviceInfo.GraphicsIndex;
-            Device.PresentIndex = SelectedDeviceInfo.PresentIndex;
+            Device.Physical            = PhysicalDevice;
+            Device.MemoryProperties    = SelectedDeviceInfo.MemoryProperties;
+            Device.GraphicsIndex       = SelectedDeviceInfo.GraphicsIndex;
+            Device.PresentIndex        = SelectedDeviceInfo.PresentIndex;
             Device.SurfaceCapabilities = SelectedDeviceInfo.SurfaceCapabilities;
-            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
+            Device.SurfaceFormats      = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
             Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceInfo.SurfacePresentModes);
         }
         else
@@ -506,8 +512,11 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
 
     VkDeviceCreateInfo LogicalDeviceCreateInfo = {};
     LogicalDeviceCreateInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    LogicalDeviceCreateInfo.flags                   = 0;
     LogicalDeviceCreateInfo.queueCreateInfoCount    = QueueCreateInfos.Count;
     LogicalDeviceCreateInfo.pQueueCreateInfos       = QueueCreateInfos.Data;
+    LogicalDeviceCreateInfo.enabledLayerCount       = 0;
+    LogicalDeviceCreateInfo.ppEnabledLayerNames     = NULL;
     LogicalDeviceCreateInfo.enabledExtensionCount   = Extensions->Count;
     LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
     LogicalDeviceCreateInfo.pEnabledFeatures        = &Config->Features;
@@ -586,6 +595,7 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     VkSwapchainCreateInfoKHR SwapchainCreateInfo = {};
     SwapchainCreateInfo.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     SwapchainCreateInfo.surface          = PlatformSurface;
+    SwapchainCreateInfo.flags            = 0;
     SwapchainCreateInfo.minImageCount    = SelectedImageCount;
     SwapchainCreateInfo.imageFormat      = SelectedSurfaceFormat.format;
     SwapchainCreateInfo.imageColorSpace  = SelectedSurfaceFormat.colorSpace;
