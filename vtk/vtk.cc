@@ -20,8 +20,22 @@ namespace vtk {
 struct vk_result_debug_info
 {
     VkResult Result;
-    cstr ResultName;
-    cstr Message;
+    cstr     ResultName;
+    cstr     Message;
+};
+
+struct device_info
+{
+    VkPhysicalDeviceProperties          Properties;
+    VkPhysicalDeviceFeatures            Features;
+    VkPhysicalDeviceMemoryProperties    MemoryProperties;
+    VkSurfaceCapabilitiesKHR            SurfaceCapabilities;
+    ctk::array<VkExtensionProperties>   Extensions;
+    ctk::array<VkSurfaceFormatKHR>      SurfaceFormats;
+    ctk::array<VkPresentModeKHR>        SurfacePresentModes;
+    ctk::array<VkQueueFamilyProperties> QueueFamilies;
+    u32                                 GraphicsIndex = VTK_UNSET_INDEX;
+    u32                                 PresentIndex = VTK_UNSET_INDEX;
 };
 
 ////////////////////////////////////////////////////////////
@@ -47,7 +61,7 @@ DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverityFlagBits, Vk
     return VK_FALSE;
 }
 
-void
+static void
 OutputVkResult(VkResult Result, cstr FunctionName)
 {
     static vk_result_debug_info VK_RESULT_DEBUG_INFOS[] =
@@ -112,16 +126,6 @@ OutputVkResult(VkResult Result, cstr FunctionName)
     }
 }
 
-void
-ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
-{
-    if(Result != VK_SUCCESS)
-    {
-        OutputVkResult(Result, FunctionName);
-        CTK_FATAL(FailureMessage)
-    }
-}
-
 template<typename vk_object, typename loader, typename ...args>
 static ctk::array<vk_object>
 LoadVkObjects(loader Loader, args... Args)
@@ -134,20 +138,20 @@ LoadVkObjects(loader Loader, args... Args)
 }
 
 static cstr
-LayerName(VkLayerProperties * Properties)
+LayerName(VkLayerProperties *Properties)
 {
     return Properties->layerName;
 }
 
 static cstr
-ExtensionName(VkExtensionProperties * Properties)
+ExtensionName(VkExtensionProperties *Properties)
 {
     return Properties->extensionName;
 }
 
-template<typename properties, typename name_selector>
+template<typename properties, typename name_selector, u32 size>
 static b32
-AddOnsSupported(ctk::array<cstr> * AddOnNames, ctk::array<properties> * SupportedAddOns, cstr Type, name_selector NameSelector)
+AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, cstr Type, name_selector NameSelector)
 {
     b32 AllSupported = true;
     for(u32 AddOnIndex = 0; AddOnIndex < AddOnNames->Count; ++AddOnIndex)
@@ -172,9 +176,9 @@ AddOnsSupported(ctk::array<cstr> * AddOnNames, ctk::array<properties> * Supporte
     return AllSupported;
 }
 
-template<typename properties, typename name_selector, typename loader, typename ...args>
+template<typename properties, typename name_selector, typename loader, u32 size, typename ...args>
 static b32
-AddOnsSupported(ctk::array<cstr> * AddOnNames, cstr Type, name_selector NameSelector, loader Loader, args... Args)
+AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, cstr Type, name_selector NameSelector, loader Loader, args... Args)
 {
     auto SupportedAddOns = LoadVkObjects<properties>(Loader, Args...);
     b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, Type, NameSelector);
@@ -182,8 +186,9 @@ AddOnsSupported(ctk::array<cstr> * AddOnNames, cstr Type, name_selector NameSele
     return AllSupported;
 }
 
+template<u32 size>
 static VkInstance
-CreateVkInstance(cstr AppName, ctk::array<cstr> *Extensions, ctk::array<cstr> *Layers,
+CreateVkInstance(cstr AppName, ctk::static_array<cstr, size> *Extensions, ctk::static_array<cstr, size> *Layers,
                  VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
 {
     VkApplicationInfo AppInfo = {};
@@ -204,47 +209,86 @@ CreateVkInstance(cstr AppName, ctk::array<cstr> *Extensions, ctk::array<cstr> *L
     InstanceCreateInfo.enabledExtensionCount   = Extensions->Count;
     InstanceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
 
-    VkInstance Instance = VK_NULL_HANDLE;
+    VkInstance Instance = {};
     VkResult Result = vkCreateInstance(&InstanceCreateInfo, NULL, &Instance);
     ValidateVkResult(Result, "vkCreateInstance", "failed to create Vulkan instance");
     return Instance;
 }
 
+static void
+DeviceInfoFree(device_info *DeviceInfo)
+{
+    Free(&DeviceInfo->Extensions);
+    Free(&DeviceInfo->SurfaceFormats);
+    Free(&DeviceInfo->SurfacePresentModes);
+    Free(&DeviceInfo->QueueFamilies);
+    *DeviceInfo = {};
+}
+
+static VkDeviceQueueCreateInfo
+CreateQueueCreateInfo(u32 QueueFamilyIndex)
+{
+    static const f32 QUEUE_PRIORITIES[] = { 1.0f };
+    VkDeviceQueueCreateInfo QueueCreateInfo = {};
+    QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueCreateInfo.queueFamilyIndex = QueueFamilyIndex;
+    QueueCreateInfo.queueCount = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
+    QueueCreateInfo.pQueuePriorities = QUEUE_PRIORITIES;
+    return QueueCreateInfo;
+}
+
+static VkImageView
+CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageAspectFlags AspectFlags)
+{
+    VkImageViewCreateInfo ImageViewCreateInfo = {};
+    ImageViewCreateInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ImageViewCreateInfo.image                           = Image;
+    ImageViewCreateInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    ImageViewCreateInfo.format                          = Format;
+    ImageViewCreateInfo.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.subresourceRange.aspectMask     = AspectFlags;
+    ImageViewCreateInfo.subresourceRange.baseMipLevel   = 0;
+    ImageViewCreateInfo.subresourceRange.levelCount     = 1;
+    ImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+    ImageViewCreateInfo.subresourceRange.layerCount     = 1;
+
+    VkImageView ImageView = {};
+    VkResult Result = vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView);
+    ValidateVkResult(Result, "vkCreateImageView", "failed to create image view");
+    return ImageView;
+}
+
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
-vulkan_instance
-CreateVulkanInstance(vulkan_instance_config *Config)
+instance
+CreateInstance(instance_config *Config)
 {
-    vulkan_instance VulkanInstance = {};
-    auto Extensions = ctk::CreateArrayEmpty<cstr>(16);
-    auto Layers = ctk::CreateArrayEmpty<cstr>(16);
-    ctk::array<cstr> *RequestedLayers = &Config->Layers;
-    ctk::array<cstr> *RequestedExtensions = &Config->Extensions;
-    if(RequestedLayers->Count > 0)
+    instance Instance = {};
+    auto *Layers = &Config->Layers;
+    auto *Extensions = &Config->Extensions;
+    if(!AddOnsSupported<VkLayerProperties>(Layers, "layer", LayerName, vkEnumerateInstanceLayerProperties))
     {
-        if(!AddOnsSupported<VkLayerProperties>(RequestedLayers, "layer", LayerName, vkEnumerateInstanceLayerProperties))
-        {
-            CTK_FATAL("not all requested layers supported")
-        }
-        ctk::Push(&Layers, RequestedLayers->Data, RequestedLayers->Count);
+        CTK_FATAL("not all requested layers supported")
     }
 
-    if(RequestedExtensions->Count > 0)
+    if(!AddOnsSupported<VkExtensionProperties>(Extensions, "extension", ExtensionName, vkEnumerateInstanceExtensionProperties, (cstr)NULL))
     {
-        if(!AddOnsSupported<VkExtensionProperties>(RequestedExtensions, "extension", ExtensionName, vkEnumerateInstanceExtensionProperties,
-                                                   (cstr)NULL))
-        {
-            CTK_FATAL("not all requested extensions supported")
-        }
-        ctk::Push(&Extensions, RequestedExtensions->Data, RequestedExtensions->Count);
+        CTK_FATAL("not all requested extensions supported")
     }
 
     if(Config->Debug)
     {
+        // Ensure add-on arrays can fit debug add-ons.
+        CTK_ASSERT(Layers->Count < Layers->Size)
+        CTK_ASSERT(Extensions->Count < Extensions->Size)
+
         // Add debug extensions and layers.
-        ctk::Push(&Extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        ctk::Push(&Layers, "VK_LAYER_LUNARG_standard_validation");
+        ctk::Push(Extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        ctk::Push(Layers, "VK_LAYER_LUNARG_standard_validation");
 
         VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {};
         DebugUtilsMessengerCreateInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -259,23 +303,356 @@ CreateVulkanInstance(vulkan_instance_config *Config)
         DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
         DebugUtilsMessengerCreateInfo.pUserData       = NULL;
 
-        VulkanInstance.Instance = CreateVkInstance(Config->AppName, &Extensions, &Layers, &DebugUtilsMessengerCreateInfo);
+        Instance.Instance = CreateVkInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
-        LOAD_INSTANCE_EXTENSION_FUNCTION(VulkanInstance.Instance, vkCreateDebugUtilsMessengerEXT)
-        VkResult Result = vkCreateDebugUtilsMessengerEXT(VulkanInstance.Instance, &DebugUtilsMessengerCreateInfo, NULL,
-                                                         &VulkanInstance.DebugUtilsMessenger);
+        LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Instance, vkCreateDebugUtilsMessengerEXT)
+        VkResult Result = vkCreateDebugUtilsMessengerEXT(Instance.Instance, &DebugUtilsMessengerCreateInfo, NULL,
+                                                         &Instance.DebugUtilsMessenger);
         ValidateVkResult(Result, "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
     }
     else
     {
-        VulkanInstance.Instance = CreateVkInstance(Config->AppName, &Extensions, &Layers, NULL);
+        Instance.Instance = CreateVkInstance(Config->AppName, Extensions, Layers, NULL);
+    }
+    return Instance;
+}
+
+device
+CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *Config)
+{
+    device Device = {};
+    auto *Extensions = &Config->Extensions;
+
+    ////////////////////////////////////////////////////////////
+    /// Physical Device
+    ////////////////////////////////////////////////////////////
+    auto PhysicalDevices = LoadVkObjects<VkPhysicalDevice>(vkEnumeratePhysicalDevices, Instance);
+    b32 FoundSuitableDevice = false;
+    for(u32 PhysicalDeviceIndex = 0; PhysicalDeviceIndex < PhysicalDevices.Count && !FoundSuitableDevice; ++PhysicalDeviceIndex)
+    {
+        device_info SelectedDeviceInfo = {};
+        VkPhysicalDevice PhysicalDevice = PhysicalDevices[PhysicalDeviceIndex];
+
+        ////////////////////////////////////////////////////////////
+        /// Device Info Loading
+        ////////////////////////////////////////////////////////////
+
+        ////////////////////////////////////////////////////////////
+        /// Potential future physical device information.
+        ////////////////////////////////////////////////////////////
+        // vkEnumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR
+        // vkGetDisplayModePropertiesKHR
+        // vkGetDisplayPlaneCapabilitiesKHR
+        // vkGetDisplayPlaneSupportedDisplaysKHR
+        // vkGetPhysicalDeviceDisplayPlanePropertiesKHR
+        // vkGetPhysicalDeviceDisplayPropertiesKHR
+        // vkGetPhysicalDeviceExternalBufferProperties
+        // vkGetPhysicalDeviceExternalBufferPropertiesKHR
+        // vkGetPhysicalDeviceExternalFenceProperties
+        // vkGetPhysicalDeviceExternalFencePropertiesKHR
+        // vkGetPhysicalDeviceExternalSemaphoreProperties
+        // vkGetPhysicalDeviceExternalSemaphorePropertiesKHR
+        // vkGetPhysicalDeviceImageFormatProperties
+        // vkGetPhysicalDevicePresentRectanglesKHR
+        // vkGetPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR
+        // vkGetPhysicalDeviceSparseImageFormatProperties
+        // vkGetPhysicalDeviceFormatProperties
+
+        // Collect requirements data.
+        vkGetPhysicalDeviceProperties(PhysicalDevice, &SelectedDeviceInfo.Properties);
+        vkGetPhysicalDeviceFeatures(PhysicalDevice, &SelectedDeviceInfo.Features);
+        vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &SelectedDeviceInfo.MemoryProperties);
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, PlatformSurface, &SelectedDeviceInfo.SurfaceCapabilities);
+        SelectedDeviceInfo.Extensions =
+            LoadVkObjects<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, PhysicalDevice, (cstr)NULL);
+        SelectedDeviceInfo.SurfaceFormats =
+            LoadVkObjects<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR, PhysicalDevice, PlatformSurface);
+        SelectedDeviceInfo.SurfacePresentModes =
+            LoadVkObjects<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, PhysicalDevice, PlatformSurface);
+        SelectedDeviceInfo.QueueFamilies =
+            LoadVkObjects<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, PhysicalDevice);
+
+        // Find queue family indexes.
+        for(u32 QueueFamilyIndex = 0; QueueFamilyIndex < SelectedDeviceInfo.QueueFamilies.Count; ++QueueFamilyIndex)
+        {
+            VkQueueFamilyProperties *QueueFamily = SelectedDeviceInfo.QueueFamilies + QueueFamilyIndex;
+            if(QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                SelectedDeviceInfo.GraphicsIndex = QueueFamilyIndex;
+            }
+            VkBool32 PresentationSupported = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(PhysicalDevice, QueueFamilyIndex, PlatformSurface, &PresentationSupported);
+            if(PresentationSupported == VK_TRUE)
+            {
+                SelectedDeviceInfo.PresentIndex = QueueFamilyIndex;
+            }
+        }
+
+        ////////////////////////////////////////////////////////////
+        /// Device Info Validation
+        ////////////////////////////////////////////////////////////
+
+        // Check if device has requested features.
+        #define _VTK_DEVICE_FEATURE_CHECK(FEATURE) \
+            if(Config->Features.FEATURE && !SelectedDeviceInfo.Features.FEATURE) \
+            { \
+                DeviceFeaturesSupported = false; \
+                ctk::Error("requested device feature \"" #FEATURE "\" not supported"); \
+            }
+
+        b32 DeviceFeaturesSupported = true;
+        _VTK_DEVICE_FEATURE_CHECK(robustBufferAccess)
+        _VTK_DEVICE_FEATURE_CHECK(fullDrawIndexUint32)
+        _VTK_DEVICE_FEATURE_CHECK(imageCubeArray)
+        _VTK_DEVICE_FEATURE_CHECK(independentBlend)
+        _VTK_DEVICE_FEATURE_CHECK(geometryShader)
+        _VTK_DEVICE_FEATURE_CHECK(tessellationShader)
+        _VTK_DEVICE_FEATURE_CHECK(sampleRateShading)
+        _VTK_DEVICE_FEATURE_CHECK(dualSrcBlend)
+        _VTK_DEVICE_FEATURE_CHECK(logicOp)
+        _VTK_DEVICE_FEATURE_CHECK(multiDrawIndirect)
+        _VTK_DEVICE_FEATURE_CHECK(drawIndirectFirstInstance)
+        _VTK_DEVICE_FEATURE_CHECK(depthClamp)
+        _VTK_DEVICE_FEATURE_CHECK(depthBiasClamp)
+        _VTK_DEVICE_FEATURE_CHECK(fillModeNonSolid)
+        _VTK_DEVICE_FEATURE_CHECK(depthBounds)
+        _VTK_DEVICE_FEATURE_CHECK(wideLines)
+        _VTK_DEVICE_FEATURE_CHECK(largePoints)
+        _VTK_DEVICE_FEATURE_CHECK(alphaToOne)
+        _VTK_DEVICE_FEATURE_CHECK(multiViewport)
+        _VTK_DEVICE_FEATURE_CHECK(samplerAnisotropy)
+        _VTK_DEVICE_FEATURE_CHECK(textureCompressionETC2)
+        _VTK_DEVICE_FEATURE_CHECK(textureCompressionASTC_LDR)
+        _VTK_DEVICE_FEATURE_CHECK(textureCompressionBC)
+        _VTK_DEVICE_FEATURE_CHECK(occlusionQueryPrecise)
+        _VTK_DEVICE_FEATURE_CHECK(pipelineStatisticsQuery)
+        _VTK_DEVICE_FEATURE_CHECK(vertexPipelineStoresAndAtomics)
+        _VTK_DEVICE_FEATURE_CHECK(fragmentStoresAndAtomics)
+        _VTK_DEVICE_FEATURE_CHECK(shaderTessellationAndGeometryPointSize)
+        _VTK_DEVICE_FEATURE_CHECK(shaderImageGatherExtended)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageExtendedFormats)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageMultisample)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageReadWithoutFormat)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageWriteWithoutFormat)
+        _VTK_DEVICE_FEATURE_CHECK(shaderUniformBufferArrayDynamicIndexing)
+        _VTK_DEVICE_FEATURE_CHECK(shaderSampledImageArrayDynamicIndexing)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageBufferArrayDynamicIndexing)
+        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageArrayDynamicIndexing)
+        _VTK_DEVICE_FEATURE_CHECK(shaderClipDistance)
+        _VTK_DEVICE_FEATURE_CHECK(shaderCullDistance)
+        _VTK_DEVICE_FEATURE_CHECK(shaderFloat64)
+        _VTK_DEVICE_FEATURE_CHECK(shaderInt64)
+        _VTK_DEVICE_FEATURE_CHECK(shaderInt16)
+        _VTK_DEVICE_FEATURE_CHECK(shaderResourceResidency)
+        _VTK_DEVICE_FEATURE_CHECK(shaderResourceMinLod)
+        _VTK_DEVICE_FEATURE_CHECK(sparseBinding)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyBuffer)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyImage2D)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyImage3D)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidency2Samples)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidency4Samples)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidency8Samples)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidency16Samples)
+        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyAliased)
+        _VTK_DEVICE_FEATURE_CHECK(variableMultisampleRate)
+        _VTK_DEVICE_FEATURE_CHECK(inheritedQueries)
+
+        // Check if physical device meets other requirements.
+        b32 SwapchainsSupported = SelectedDeviceInfo.SurfaceFormats.Count != 0 &&
+                                  SelectedDeviceInfo.SurfacePresentModes.Count != 0;
+        if(SelectedDeviceInfo.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+           SelectedDeviceInfo.GraphicsIndex != VTK_UNSET_INDEX &&
+           SelectedDeviceInfo.PresentIndex != VTK_UNSET_INDEX &&
+           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceInfo.Extensions, "extension", ExtensionName);
+           DeviceFeaturesSupported &&
+           SwapchainsSupported)
+        {
+            ctk::Info("physical device \"%s\" satisfies all requirements", SelectedDeviceInfo.Properties.deviceName);
+            FoundSuitableDevice = true;
+
+            // Initialize physical device with selected device info.
+            Device.Physical = PhysicalDevice;
+            Device.MemoryProperties = SelectedDeviceInfo.MemoryProperties;
+            Device.GraphicsIndex = SelectedDeviceInfo.GraphicsIndex;
+            Device.PresentIndex = SelectedDeviceInfo.PresentIndex;
+            Device.SurfaceCapabilities = SelectedDeviceInfo.SurfaceCapabilities;
+            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
+            Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceInfo.SurfacePresentModes);
+        }
+        else
+        {
+            ctk::Error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceInfo.Properties.deviceName);
+        }
+        DeviceInfoFree(&SelectedDeviceInfo);
+        if(FoundSuitableDevice)
+        {
+            break;
+        }
+    }
+    if(!FoundSuitableDevice)
+    {
+        CTK_FATAL("failed to find suitable device")
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Logical Device
+    ////////////////////////////////////////////////////////////
+    ctk::static_array<VkDeviceQueueCreateInfo, 2> QueueCreateInfos = {};
+    Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.GraphicsIndex));
+    if(Device.PresentIndex != Device.GraphicsIndex)
+    {
+        Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.PresentIndex));
+    }
+
+    VkDeviceCreateInfo LogicalDeviceCreateInfo = {};
+    LogicalDeviceCreateInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    LogicalDeviceCreateInfo.queueCreateInfoCount    = QueueCreateInfos.Count;
+    LogicalDeviceCreateInfo.pQueueCreateInfos       = QueueCreateInfos.Data;
+    LogicalDeviceCreateInfo.enabledExtensionCount   = Extensions->Count;
+    LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
+    LogicalDeviceCreateInfo.pEnabledFeatures        = &Config->Features;
+
+    VkResult Result = vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical);
+    ValidateVkResult(Result, "vkCreateDevice", "failed to create logical device");
+
+    // Get logical device queues.
+    static const u32 QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
+    vkGetDeviceQueue(Device.Logical, Device.GraphicsIndex, QUEUE_INDEX, &Device.GraphicsQueue);
+    vkGetDeviceQueue(Device.Logical, Device.PresentIndex, QUEUE_INDEX, &Device.PresentQueue);
+
+    // Cleanup
+    Free(&PhysicalDevices);
+
+    return Device;
+}
+
+swapchain
+CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
+{
+    swapchain Swapchain = {};
+
+    ////////////////////////////////////////////////////////////
+    /// Configuration
+    ////////////////////////////////////////////////////////////
+
+    // Default to first surface format.
+    VkSurfaceFormatKHR SelectedSurfaceFormat = Device->SurfaceFormats[0];
+    for(u32 SurfaceFormatIndex = 0; SurfaceFormatIndex < Device->SurfaceFormats.Count; ++SurfaceFormatIndex)
+    {
+        VkSurfaceFormatKHR SurfaceFormat = Device->SurfaceFormats[SurfaceFormatIndex];
+
+        // Prefer 4-component 8-bit BGRA unsigned normalized (linear) format and sRGB color space.
+        if(SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            SelectedSurfaceFormat = SurfaceFormat;
+            break;
+        }
+    }
+
+    // Default to FIFO (only present mode with guarenteed availability).
+    VkPresentModeKHR SelectedSurfacePresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    for(u32 SurfacePresentModeIndex = 0; SurfacePresentModeIndex < Device->SurfacePresentModes.Count; ++SurfacePresentModeIndex)
+    {
+        VkPresentModeKHR SurfacePresentMode = Device->SurfacePresentModes[SurfacePresentModeIndex];
+
+        // Mailbox is the preferred present mode if available.
+        if(SurfacePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            SelectedSurfacePresentMode = SurfacePresentMode;
+            break;
+        }
+    }
+
+    // Set image count to min image count + 1 or max image count (whichever is smaller).
+    u32 SelectedImageCount = Device->SurfaceCapabilities.minImageCount + 1;
+    if(Device->SurfaceCapabilities.maxImageCount > 0 && SelectedImageCount > Device->SurfaceCapabilities.maxImageCount)
+    {
+        SelectedImageCount = Device->SurfaceCapabilities.maxImageCount;
+    }
+
+    // Verify current extent has been set for surface.
+    if(Device->SurfaceCapabilities.currentExtent.width == UINT32_MAX)
+    {
+        CTK_FATAL("current extent not set for surface")
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Swapchain Creation
+    ////////////////////////////////////////////////////////////
+    u32 GraphicsIndex = Device->GraphicsIndex;
+    u32 PresentIndex = Device->PresentIndex;
+    u32 QueueFamilyIndexes[] = { GraphicsIndex, PresentIndex };
+
+    VkSwapchainCreateInfoKHR SwapchainCreateInfo = {};
+    SwapchainCreateInfo.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    SwapchainCreateInfo.surface          = PlatformSurface;
+    SwapchainCreateInfo.minImageCount    = SelectedImageCount;
+    SwapchainCreateInfo.imageFormat      = SelectedSurfaceFormat.format;
+    SwapchainCreateInfo.imageColorSpace  = SelectedSurfaceFormat.colorSpace;
+    SwapchainCreateInfo.imageExtent      = Device->SurfaceCapabilities.currentExtent;
+    SwapchainCreateInfo.imageArrayLayers = 1; // Always 1 for standard images.
+    SwapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    SwapchainCreateInfo.preTransform     = Device->SurfaceCapabilities.currentTransform;
+    SwapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    SwapchainCreateInfo.presentMode      = SelectedSurfacePresentMode;
+    SwapchainCreateInfo.clipped          = VK_TRUE;
+    SwapchainCreateInfo.oldSwapchain     = VK_NULL_HANDLE;
+    if(GraphicsIndex != PresentIndex)
+    {
+        SwapchainCreateInfo.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
+        SwapchainCreateInfo.queueFamilyIndexCount = CTK_ARRAY_COUNT(QueueFamilyIndexes);
+        SwapchainCreateInfo.pQueueFamilyIndices   = QueueFamilyIndexes;
+    }
+    else
+    {
+        SwapchainCreateInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+        SwapchainCreateInfo.queueFamilyIndexCount = 0;
+        SwapchainCreateInfo.pQueueFamilyIndices   = NULL;
+    }
+
+    VkResult Result = vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Swapchain);
+    ValidateVkResult(Result, "vkCreateSwapchainKHR", "failed to create swapchain");
+
+    ////////////////////////////////////////////////////////////
+    /// Swapchain Image Creation
+    ////////////////////////////////////////////////////////////
+    auto Images = LoadVkObjects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Swapchain);
+    for(u32 ImageIndex = 0; ImageIndex < Images.Count; ++ImageIndex)
+    {
+        swapchain_image *SwapchainImage = ctk::Push(&Swapchain.Images);
+        SwapchainImage->Image = Images[ImageIndex];
+        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Image, SelectedSurfaceFormat.format,
+                                               VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     // Cleanup
-    ctk::Free(&Extensions);
-    ctk::Free(&Layers);
+    Free(&Images);
 
-    return VulkanInstance;
+    return Swapchain;
+}
+
+VkCommandPool
+CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
+{
+    VkCommandPoolCreateInfo CommandPoolCreateInfo = {};
+    CommandPoolCreateInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    CommandPoolCreateInfo.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    CommandPoolCreateInfo.queueFamilyIndex = QueueFamilyIndex;
+
+    VkCommandPool CommandPool = {};
+    VkResult Result = vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool);
+    ValidateVkResult(Result, "vkCreateCommandPool", "failed to create command pool");
+    return CommandPool;
+}
+
+void
+ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
+{
+    if(Result != VK_SUCCESS)
+    {
+        OutputVkResult(Result, FunctionName);
+        CTK_FATAL(FailureMessage)
+    }
 }
 
 } // vtk
