@@ -151,7 +151,7 @@ ExtensionName(VkExtensionProperties *Properties)
 
 template<typename properties, typename name_selector, u32 size>
 static b32
-AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, cstr Type, name_selector NameSelector)
+AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
 {
     b32 AllSupported = true;
     for(u32 AddOnIndex = 0; AddOnIndex < AddOnNames->Count; ++AddOnIndex)
@@ -170,7 +170,7 @@ AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties
         if(!Supported)
         {
             AllSupported = false;
-            ctk::Error("%s \"%s\" is not supported", Type, AddOnName);
+            ctk::Error("add-on \"%s\" is not supported", AddOnName);
         }
     }
     return AllSupported;
@@ -178,10 +178,10 @@ AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties
 
 template<typename properties, typename name_selector, typename loader, u32 size, typename ...args>
 static b32
-AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, cstr Type, name_selector NameSelector, loader Loader, args... Args)
+AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, name_selector NameSelector, loader Loader, args... Args)
 {
     auto SupportedAddOns = LoadVkObjects<properties>(Loader, Args...);
-    b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, Type, NameSelector);
+    b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, NameSelector);
     ctk::Free(&SupportedAddOns);
     return AllSupported;
 }
@@ -290,12 +290,12 @@ CreateInstance(instance_config *Config)
     instance Instance = {};
     auto *Layers = &Config->Layers;
     auto *Extensions = &Config->Extensions;
-    if(!AddOnsSupported<VkLayerProperties>(Layers, "layer", LayerName, vkEnumerateInstanceLayerProperties))
+    if(!AddOnsSupported<VkLayerProperties>(Layers, LayerName, vkEnumerateInstanceLayerProperties))
     {
         CTK_FATAL("not all requested layers supported")
     }
 
-    if(!AddOnsSupported<VkExtensionProperties>(Extensions, "extension", ExtensionName, vkEnumerateInstanceExtensionProperties, (cstr)NULL))
+    if(!AddOnsSupported<VkExtensionProperties>(Extensions, ExtensionName, vkEnumerateInstanceExtensionProperties, (cstr)NULL))
     {
         CTK_FATAL("not all requested extensions supported")
     }
@@ -484,7 +484,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         if(SelectedDeviceInfo.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
            SelectedDeviceInfo.GraphicsIndex != VTK_UNSET_INDEX &&
            SelectedDeviceInfo.PresentIndex != VTK_UNSET_INDEX &&
-           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceInfo.Extensions, "extension", ExtensionName);
+           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceInfo.Extensions, ExtensionName);
            DeviceFeaturesSupported &&
            SwapchainsSupported)
         {
@@ -561,7 +561,7 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     {
         VkSurfaceFormatKHR SurfaceFormat = Device->SurfaceFormats[SurfaceFormatIndex];
 
-        // Prefer 4-component 8-bit BGRA unsigned normalized (linear) format and sRGB color space.
+        // Prefer 4-component 8-bit BGRA unsigned normalized format and sRGB color space.
         if(SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
             SelectedSurfaceFormat = SurfaceFormat;
