@@ -490,10 +490,6 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             ctk::Error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceInfo.Properties.deviceName);
         }
         DeviceInfoFree(&SelectedDeviceInfo);
-        if(FoundSuitableDevice)
-        {
-            break;
-        }
     }
     if(!FoundSuitableDevice)
     {
