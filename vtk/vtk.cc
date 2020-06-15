@@ -266,6 +266,21 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
     return ImageView;
 }
 
+static u32
+FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties * MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
+{
+    for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < MemoryProperties->memoryTypeCount; ++MemoryTypeIndex)
+    {
+        // Check if memory at index has correct type and properties.
+        if((MemoryTypeBits & (1 << MemoryTypeIndex)) &&
+           (MemoryProperties->memoryTypes[MemoryTypeIndex].propertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
+        {
+            return MemoryTypeIndex;
+        }
+    }
+    CTK_FATAL("failed to find memory type")
+}
+
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
@@ -649,6 +664,100 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
     VkResult Result = vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool);
     ValidateVkResult(Result, "vkCreateCommandPool", "failed to create command pool");
     return CommandPool;
+}
+
+buffer
+CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags)
+{
+    buffer Buffer = {};
+
+    // Buffer Creation
+    VkBufferCreateInfo BufferCreateInfo = {};
+    BufferCreateInfo.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    BufferCreateInfo.size                  = Size;
+    BufferCreateInfo.usage                 = UsageFlags;
+    BufferCreateInfo.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
+    BufferCreateInfo.queueFamilyIndexCount = 0;
+    BufferCreateInfo.pQueueFamilyIndices   = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    {
+        VkResult Result = vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Buffer);
+        ValidateVkResult(Result, "vkCreateBuffer", "failed to create buffer");
+    }
+
+    // Memory Allocation
+    VkMemoryRequirements MemoryRequirements = {};
+    vkGetBufferMemoryRequirements(Device->Logical, Buffer.Buffer, &MemoryRequirements);
+
+    VkMemoryAllocateInfo MemoryAllocateInfo = {};
+    MemoryAllocateInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    MemoryAllocateInfo.allocationSize  = MemoryRequirements.size;
+    MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
+                                                             MemoryPropertyFlags);
+
+    // SOURCE: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer
+    // It should be noted that in a real world application, you're not supposed to actually call vkAllocateMemory for
+    // every individual buffer. The maximum number of simultaneous memory allocations is limited by the
+    // maxMemoryAllocationCount physical device limit, which may be as low as 4096 even on high end hardware like an
+    // NVIDIA GTX 1080. The right way to allocate memory for a large number of objects at the same time is to create a
+    // custom allocator that splits up a single allocation among many different objects by using the offset parameters
+    // that we've seen in many functions.
+    VkResult allocate_memory_result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory);
+    ValidateVkResult(allocate_memory_result, "vkAllocateMemory", "failed to allocate memory for buffer");
+
+    // Bind device memory to buffer object.
+    {
+        VkResult Result = vkBindBufferMemory(Device->Logical, Buffer.Buffer, Buffer.Memory, 0);
+        ValidateVkResult(Result, "vkBindBufferMemory", "failed to bind buffer memory");
+    }
+
+    return Buffer;
+}
+
+shader_stages
+CreateShaderStages(VkDevice LogicalDevice, shader_stage_config *Configs, u32 ConfigCount)
+{
+    shader_stages ShaderStages = {};
+    ShaderStages.Modules = ctk::CreateArray<VkShaderModule>(ConfigCount);
+    ShaderStages.CreateInfos = ctk::CreateArray<VkPipelineShaderStageCreateInfo>(ConfigCount);
+    for(u32 ConfigIndex = 0; ConfigIndex < ConfigCount; ++ConfigIndex)
+    {
+        shader_stage_config             *Config     = Configs + ConfigIndex;
+        VkShaderModule                  *Module     = ShaderStages.Modules + ConfigIndex;
+        VkPipelineShaderStageCreateInfo *CreateInfo = ShaderStages.CreateInfos + ConfigIndex;
+
+        ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Config->Path);
+
+        // Create Module from shader bytecode.
+        VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
+        ShaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        ShaderModuleCreateInfo.flags    = 0;
+        ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
+        ShaderModuleCreateInfo.pCode    = (const u32 *)ShaderByteCode.Data;
+
+        VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, Module);
+        ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
+
+        // Create CreateInfo with Module.
+        CreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        CreateInfo->stage               = Config->StageBit;
+        CreateInfo->module              = *Module;
+        CreateInfo->pName               = "main";
+        CreateInfo->pSpecializationInfo = NULL;
+
+        // Cleanup
+        Free(&ShaderByteCode);
+    }
+    return ShaderStages;
+}
+
+void
+WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset)
+{
+    void *MappedMemory = NULL;
+    VkResult Result = vkMapMemory(LogicalDevice, Buffer->Memory, Offset, Size, 0, &MappedMemory);
+    ValidateVkResult(Result, "vkMapMemory", "failed to map host coherent buffer to host memory");
+    memcpy(MappedMemory, Data, Size);
+    vkUnmapMemory(LogicalDevice, Buffer->Memory);
 }
 
 void

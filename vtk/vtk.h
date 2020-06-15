@@ -65,6 +65,26 @@ struct swapchain
     ctk::static_array<swapchain_image, 4> Images;
 };
 
+struct buffer
+{
+    VkBuffer       Buffer;
+    VkDeviceMemory Memory;
+    u32            ElementCount;
+    u32            ElementSize;
+};
+
+struct shader_stage_config
+{
+    cstr                  Path;
+    VkShaderStageFlagBits StageBit;
+};
+
+struct shader_stages
+{
+    ctk::array<VkShaderModule>                  Modules;
+    ctk::array<VkPipelineShaderStageCreateInfo> CreateInfos;
+};
+
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
@@ -83,6 +103,18 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device);
 VTK_API
 VkCommandPool
 CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex);
+
+VTK_API
+buffer
+CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags);
+
+VTK_API
+shader_stages
+CreateShaderStages(VkDevice LogicalDevice, shader_stage_config* Configs, u32 ConfigCount);
+
+VTK_API
+void
+WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
 
 VTK_API
 void
