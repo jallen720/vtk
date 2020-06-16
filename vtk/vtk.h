@@ -73,16 +73,15 @@ struct buffer
     u32            ElementSize;
 };
 
-struct shader_stage_config
+struct shader_module
 {
-    cstr                  Path;
+    VkShaderModule        Module;
     VkShaderStageFlagBits StageBit;
 };
 
-struct shader_stages
+struct graphics_pipeline
 {
-    ctk::array<VkShaderModule>                  Modules;
-    ctk::array<VkPipelineShaderStageCreateInfo> CreateInfos;
+    VkPipeline Pipeline;
 };
 
 ////////////////////////////////////////////////////////////
@@ -109,8 +108,16 @@ buffer
 CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags);
 
 VTK_API
-shader_stages
-CreateShaderStages(VkDevice LogicalDevice, shader_stage_config* Configs, u32 ConfigCount);
+shader_module
+CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit);
+
+VTK_API
+VkPipelineShaderStageCreateInfo
+CreateShaderStage(shader_module *ShaderModule);
+
+VTK_API
+graphics_pipeline
+CreateGraphicsPipeline(VkDevice LogicalDevice, VkPipelineShaderStageCreateInfo *ShaderStages, u32 ShaderStageCount);
 
 VTK_API
 void

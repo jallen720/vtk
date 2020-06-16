@@ -713,41 +713,77 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     return Buffer;
 }
 
-shader_stages
-CreateShaderStages(VkDevice LogicalDevice, shader_stage_config *Configs, u32 ConfigCount)
+shader_module
+CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit)
 {
-    shader_stages ShaderStages = {};
-    ShaderStages.Modules = ctk::CreateArray<VkShaderModule>(ConfigCount);
-    ShaderStages.CreateInfos = ctk::CreateArray<VkPipelineShaderStageCreateInfo>(ConfigCount);
-    for(u32 ConfigIndex = 0; ConfigIndex < ConfigCount; ++ConfigIndex)
+    shader_module ShaderModule = {};
+    ShaderModule.StageBit = StageBit;
+    ctk::Warning("read shader bytecode as const u32?");
+    ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Path);
+
+    VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
+    ShaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    ShaderModuleCreateInfo.flags    = 0;
+    ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
+    ShaderModuleCreateInfo.pCode    = (const u32 *)ShaderByteCode.Data;
+
+    VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Module);
+    ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
+
+    // Cleanup
+    Free(&ShaderByteCode);
+
+    return ShaderModule;
+}
+
+VkPipelineShaderStageCreateInfo
+CreateShaderStage(shader_module *ShaderModule)
+{
+    VkPipelineShaderStageCreateInfo CreateInfo = {};
+    CreateInfo.sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    CreateInfo.flags               = 0;
+    CreateInfo.stage               = ShaderModule->StageBit;
+    CreateInfo.module              = ShaderModule->Module;
+    CreateInfo.pName               = "main";
+    CreateInfo.pSpecializationInfo = NULL;
+
+    return CreateInfo;
+}
+
+graphics_pipeline
+CreateGraphicsPipeline(VkDevice LogicalDevice, VkPipelineShaderStageCreateInfo *ShaderStages, u32 ShaderStageCount)
+{
+    graphics_pipeline GraphicsPipeline = {};
+    VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfos[1] = {};
+
+    GraphicsPipelineCreateInfos[0].sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    GraphicsPipelineCreateInfos[0].stageCount          = ShaderStageCount;
+    GraphicsPipelineCreateInfos[0].pStages             = ShaderStages;
+    // GraphicsPipelineCreateInfos[0].pVertexInputState   = &vertex_input_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pInputAssemblyState = &input_assembly_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pTessellationState  = NULL;
+    // GraphicsPipelineCreateInfos[0].pViewportState      = &viewport_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pRasterizationState = &rasterization_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pMultisampleState   = &multisample_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pDepthStencilState  = &depth_stencil_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pColorBlendState    = &color_blend_state_create_info;
+    // GraphicsPipelineCreateInfos[0].pDynamicState       = NULL;
+    // GraphicsPipelineCreateInfos[0].layout              = gfx_pipeline.layout;
+    // GraphicsPipelineCreateInfos[0].renderPass          = render_pass;
+    // GraphicsPipelineCreateInfos[0].subpass             = 0;
+    // GraphicsPipelineCreateInfos[0].basePipelineHandle  = VK_NULL_HANDLE;
+    // GraphicsPipelineCreateInfos[0].basePipelineIndex   = -1;
+
     {
-        shader_stage_config             *Config     = Configs + ConfigIndex;
-        VkShaderModule                  *Module     = ShaderStages.Modules + ConfigIndex;
-        VkPipelineShaderStageCreateInfo *CreateInfo = ShaderStages.CreateInfos + ConfigIndex;
-
-        ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Config->Path);
-
-        // Create Module from shader bytecode.
-        VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
-        ShaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        ShaderModuleCreateInfo.flags    = 0;
-        ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
-        ShaderModuleCreateInfo.pCode    = (const u32 *)ShaderByteCode.Data;
-
-        VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, Module);
-        ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
-
-        // Create CreateInfo with Module.
-        CreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        CreateInfo->stage               = Config->StageBit;
-        CreateInfo->module              = *Module;
-        CreateInfo->pName               = "main";
-        CreateInfo->pSpecializationInfo = NULL;
-
-        // Cleanup
-        Free(&ShaderByteCode);
+        VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
+                                                    VK_NULL_HANDLE, // Pipeline Cache
+                                                    CTK_ARRAY_COUNT(GraphicsPipelineCreateInfos),
+                                                    GraphicsPipelineCreateInfos,
+                                                    NULL, // Allocation Callbacks
+                                                    &GraphicsPipeline.Pipeline);
+        ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
     }
-    return ShaderStages;
+    return GraphicsPipeline;
 }
 
 void

@@ -108,16 +108,23 @@ main()
         0.5f,  0.25f, 0.0f,
         0.75f, 0.75f, 0.0f,
     };
-    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(VertexData),
-                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(VertexData), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     vtk::WriteToHostCoherentBuffer(Device.Logical, &VertexBuffer, VertexData, sizeof(VertexData) - 1, 1);
 
-    // Shader Stages
-    ctk::static_array<vtk::shader_stage_config, 2> ShaderStageConfigs = {};
-    ctk::Push(&ShaderStageConfigs, { "assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT });
-    ctk::Push(&ShaderStageConfigs, { "assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
-    vtk::shader_stages ShaderStages = CreateShaderStages(Device.Logical, ShaderStageConfigs.Data, ShaderStageConfigs.Count);
+    // Shader Modules
+    vtk::shader_module VertexShader =
+        vtk::CreateShaderModule(Device.Logical, "assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    vtk::shader_module FragmentShader =
+        vtk::CreateShaderModule(Device.Logical, "assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    // Graphics Pipelines
+    VkPipelineShaderStageCreateInfo ShaderStages[] =
+    {
+        vtk::CreateShaderStage(&VertexShader),
+        vtk::CreateShaderStage(&FragmentShader),
+    };
+    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, ShaderStages, CTK_ARRAY_COUNT(ShaderStages));
 
     ////////////////////////////////////////////////////////////
     /// Main Loop
