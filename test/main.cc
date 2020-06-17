@@ -99,7 +99,7 @@ main()
     vtk::swapchain Swapchain = vtk::CreateSwapchain(PlatformSurface, &Device);
 
     // Graphics Command Pool
-    VkCommandPool GraphicsCommandPool = vtk::CreateCommandPool(Device.Logical, Device.GraphicsIndex);
+    VkCommandPool GraphicsCommandPool = vtk::CreateCommandPool(Device.Logical, Device.QueueFamilyIndexes.Graphics);
 
     // Data
     f32 VertexData[] =

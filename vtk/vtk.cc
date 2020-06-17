@@ -34,8 +34,7 @@ struct device_info
     ctk::array<VkSurfaceFormatKHR>      SurfaceFormats;
     ctk::array<VkPresentModeKHR>        SurfacePresentModes;
     ctk::array<VkQueueFamilyProperties> QueueFamilies;
-    u32                                 GraphicsIndex = VTK_UNSET_INDEX;
-    u32                                 PresentIndex = VTK_UNSET_INDEX;
+    queue_family_indexes                QueueFamilyIndexes;
 };
 
 ////////////////////////////////////////////////////////////
@@ -399,13 +398,13 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             VkQueueFamilyProperties *QueueFamily = SelectedDeviceInfo.QueueFamilies + QueueFamilyIndex;
             if(QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
-                SelectedDeviceInfo.GraphicsIndex = QueueFamilyIndex;
+                SelectedDeviceInfo.QueueFamilyIndexes.Graphics = QueueFamilyIndex;
             }
             VkBool32 PresentationSupported = VK_FALSE;
             vkGetPhysicalDeviceSurfaceSupportKHR(PhysicalDevice, QueueFamilyIndex, PlatformSurface, &PresentationSupported);
             if(PresentationSupported == VK_TRUE)
             {
-                SelectedDeviceInfo.PresentIndex = QueueFamilyIndex;
+                SelectedDeviceInfo.QueueFamilyIndexes.Present = QueueFamilyIndex;
             }
         }
 
@@ -482,8 +481,8 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         b32 SwapchainsSupported = SelectedDeviceInfo.SurfaceFormats.Count != 0 &&
                                   SelectedDeviceInfo.SurfacePresentModes.Count != 0;
         if(SelectedDeviceInfo.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-           SelectedDeviceInfo.GraphicsIndex != VTK_UNSET_INDEX &&
-           SelectedDeviceInfo.PresentIndex != VTK_UNSET_INDEX &&
+           SelectedDeviceInfo.QueueFamilyIndexes.Graphics != VTK_UNSET_INDEX &&
+           SelectedDeviceInfo.QueueFamilyIndexes.Present != VTK_UNSET_INDEX &&
            AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceInfo.Extensions, ExtensionName);
            DeviceFeaturesSupported &&
            SwapchainsSupported)
@@ -494,8 +493,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             // Initialize physical device with selected device info.
             Device.Physical            = PhysicalDevice;
             Device.MemoryProperties    = SelectedDeviceInfo.MemoryProperties;
-            Device.GraphicsIndex       = SelectedDeviceInfo.GraphicsIndex;
-            Device.PresentIndex        = SelectedDeviceInfo.PresentIndex;
+            Device.QueueFamilyIndexes  = SelectedDeviceInfo.QueueFamilyIndexes;
             Device.SurfaceCapabilities = SelectedDeviceInfo.SurfaceCapabilities;
             Device.SurfaceFormats      = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
             Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceInfo.SurfacePresentModes);
@@ -515,10 +513,10 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     /// Logical Device
     ////////////////////////////////////////////////////////////
     ctk::static_array<VkDeviceQueueCreateInfo, 2> QueueCreateInfos = {};
-    Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.GraphicsIndex));
-    if(Device.PresentIndex != Device.GraphicsIndex)
+    Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.QueueFamilyIndexes.Graphics));
+    if(Device.QueueFamilyIndexes.Present != Device.QueueFamilyIndexes.Graphics)
     {
-        Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.PresentIndex));
+        Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.QueueFamilyIndexes.Present));
     }
 
     VkDeviceCreateInfo LogicalDeviceCreateInfo = {};
@@ -537,8 +535,8 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
 
     // Get logical device queues.
     static const u32 QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
-    vkGetDeviceQueue(Device.Logical, Device.GraphicsIndex, QUEUE_INDEX, &Device.GraphicsQueue);
-    vkGetDeviceQueue(Device.Logical, Device.PresentIndex, QUEUE_INDEX, &Device.PresentQueue);
+    vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Graphics, QUEUE_INDEX, &Device.GraphicsQueue);
+    vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Present, QUEUE_INDEX, &Device.PresentQueue);
 
     // Cleanup
     Free(&PhysicalDevices);
@@ -599,9 +597,9 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     ////////////////////////////////////////////////////////////
     /// Swapchain Creation
     ////////////////////////////////////////////////////////////
-    u32 GraphicsIndex = Device->GraphicsIndex;
-    u32 PresentIndex = Device->PresentIndex;
-    u32 QueueFamilyIndexes[] = { GraphicsIndex, PresentIndex };
+    u32 GraphicsQueueFamilyIndex = Device->QueueFamilyIndexes.Graphics;
+    u32 PresentQueueFamilyIndex = Device->QueueFamilyIndexes.Present;
+    u32 QueueFamilyIndexes[] = { GraphicsQueueFamilyIndex, PresentQueueFamilyIndex };
 
     VkSwapchainCreateInfoKHR SwapchainCreateInfo = {};
     SwapchainCreateInfo.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -618,7 +616,7 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     SwapchainCreateInfo.presentMode      = SelectedSurfacePresentMode;
     SwapchainCreateInfo.clipped          = VK_TRUE;
     SwapchainCreateInfo.oldSwapchain     = VK_NULL_HANDLE;
-    if(GraphicsIndex != PresentIndex)
+    if(GraphicsQueueFamilyIndex != PresentQueueFamilyIndex)
     {
         SwapchainCreateInfo.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
         SwapchainCreateInfo.queueFamilyIndexCount = CTK_ARRAY_COUNT(QueueFamilyIndexes);

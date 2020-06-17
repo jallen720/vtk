@@ -38,12 +38,17 @@ struct device_config
     VkPhysicalDeviceFeatures   Features;
 };
 
+struct queue_family_indexes
+{
+    u32 Graphics = VTK_UNSET_INDEX;
+    u32 Present  = VTK_UNSET_INDEX;
+};
+
 struct device
 {
     VkPhysicalDevice                 Physical;
     VkPhysicalDeviceMemoryProperties MemoryProperties;
-    u32                              GraphicsIndex = VTK_UNSET_INDEX;
-    u32                              PresentIndex = VTK_UNSET_INDEX;
+    queue_family_indexes             QueueFamilyIndexes;
     VkSurfaceCapabilitiesKHR         SurfaceCapabilities;
     ctk::array<VkSurfaceFormatKHR>   SurfaceFormats;
     ctk::array<VkPresentModeKHR>     SurfacePresentModes;
