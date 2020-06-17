@@ -1,10 +1,10 @@
 window
 {
-    width 1280
+    width  1280
     height 720
-    x 640
-    y 70
-    title "VTK Test"
+    x      640
+    y      70
+    title  "VTK Test"
 }
-debug true
+debug    true
 app_name "VTK Test"

@@ -646,6 +646,9 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
                                                VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
+    // Cache swapchain extent for future reference.
+    Swapchain.Extent = Device->SurfaceCapabilities.currentExtent;
+
     // Cleanup
     Free(&Images);
 
@@ -750,39 +753,146 @@ CreateShaderStage(shader_module *ShaderModule)
     return CreateInfo;
 }
 
+u32
+PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
+{
+    static VkFormat FORMATS[] =
+    {
+        VK_FORMAT_R32_SFLOAT,
+        VK_FORMAT_R32G32_SFLOAT,
+        VK_FORMAT_R32G32B32_SFLOAT,
+        VK_FORMAT_R32G32B32A32_SFLOAT,
+    };
+    CTK_ASSERT(ElementCount <= CTK_ARRAY_COUNT(FORMATS));
+    u32 AttributeSize = sizeof(f32) * ElementCount;
+    u32 AttributeIndex = VertexLayout->Attributes.Count;
+    ctk::Push(&VertexLayout->Attributes, { FORMATS[ElementCount - 1], AttributeSize, VertexLayout->Size });
+    VertexLayout->Size += AttributeSize;
+    return AttributeIndex;
+}
+
+vertex_input_state
+CreateVertexInputState(ctk::static_array<vertex_input, 4> *VertexInputs, vertex_layout *VertexLayout)
+{
+    vertex_input_state VertexInputState = {};
+    for(u32 InputIndex = 0; InputIndex < VertexInputs->Count; InputIndex++)
+    {
+        vertex_input *VertexInput = At(VertexInputs, InputIndex);
+        vertex_attribute *VertexAttribute = VertexLayout->Attributes + VertexInput->AttributeIndex;
+
+        VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexInputState.AttributeDescriptions);
+        AttributeDescription->location = VertexInput->Location;
+        AttributeDescription->binding  = VertexInput->Binding;
+        AttributeDescription->format   = VertexAttribute->Format;
+        AttributeDescription->offset   = VertexAttribute->Offset;
+    }
+
+    VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexInputState.BindingDescriptions);
+    BindingDescription->binding   = 0;
+    BindingDescription->stride    = VertexLayout->Size;
+    BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkPipelineVertexInputStateCreateInfo *InputState = &VertexInputState.State;
+    InputState->sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    InputState->vertexBindingDescriptionCount   = VertexInputState.BindingDescriptions.Count;
+    InputState->pVertexBindingDescriptions      = VertexInputState.BindingDescriptions.Data;
+    InputState->vertexAttributeDescriptionCount = VertexInputState.AttributeDescriptions.Count;
+    InputState->pVertexAttributeDescriptions    = VertexInputState.AttributeDescriptions.Data;
+
+    return VertexInputState;
+}
+
+viewport_state
+CreateViewportState(VkExtent2D Extent)
+{
+    viewport_state ViewportState = {};
+
+    ViewportState.Viewport.x        = 0.0f;
+    ViewportState.Viewport.y        = 0.0f;
+    ViewportState.Viewport.width    = (f32)Extent.width;
+    ViewportState.Viewport.height   = (f32)Extent.height;
+    ViewportState.Viewport.minDepth = 0.0f;
+    ViewportState.Viewport.maxDepth = 1.0f;
+
+    // Make scissor fill viewport.
+    ViewportState.Scissor.offset.x      = 0;
+    ViewportState.Scissor.offset.y      = 0;
+    ViewportState.Scissor.extent.width  = ViewportState.Viewport.width;
+    ViewportState.Scissor.extent.height = ViewportState.Viewport.height;
+
+    ViewportState.State.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    ViewportState.State.viewportCount = 1;
+    ViewportState.State.pViewports    = &ViewportState.Viewport;
+    ViewportState.State.scissorCount  = 1;
+    ViewportState.State.pScissors     = &ViewportState.Scissor;
+
+    return ViewportState;
+}
+
 graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, VkPipelineShaderStageCreateInfo *ShaderStages, u32 ShaderStageCount)
+CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
 {
     graphics_pipeline GraphicsPipeline = {};
-    VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfos[1] = {};
 
-    GraphicsPipelineCreateInfos[0].sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    GraphicsPipelineCreateInfos[0].stageCount          = ShaderStageCount;
-    GraphicsPipelineCreateInfos[0].pStages             = ShaderStages;
-    // GraphicsPipelineCreateInfos[0].pVertexInputState   = &vertex_input_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pInputAssemblyState = &input_assembly_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pTessellationState  = NULL;
-    // GraphicsPipelineCreateInfos[0].pViewportState      = &viewport_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pRasterizationState = &rasterization_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pMultisampleState   = &multisample_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pDepthStencilState  = &depth_stencil_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pColorBlendState    = &color_blend_state_create_info;
-    // GraphicsPipelineCreateInfos[0].pDynamicState       = NULL;
-    // GraphicsPipelineCreateInfos[0].layout              = gfx_pipeline.layout;
-    // GraphicsPipelineCreateInfos[0].renderPass          = render_pass;
-    // GraphicsPipelineCreateInfos[0].subpass             = 0;
-    // GraphicsPipelineCreateInfos[0].basePipelineHandle  = VK_NULL_HANDLE;
-    // GraphicsPipelineCreateInfos[0].basePipelineIndex   = -1;
+    ////////////////////////////////////////////////////////////
+    /// Configure State
+    ////////////////////////////////////////////////////////////
+    VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
+    InputAssemblyState.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    InputAssemblyState.topology               = Config->PrimitiveTopology;
+    InputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
-    {
-        VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
-                                                    VK_NULL_HANDLE, // Pipeline Cache
-                                                    CTK_ARRAY_COUNT(GraphicsPipelineCreateInfos),
-                                                    GraphicsPipelineCreateInfos,
-                                                    NULL, // Allocation Callbacks
-                                                    &GraphicsPipeline.Pipeline);
-        ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
-    }
+    VkPipelineRasterizationStateCreateInfo RasterizationState = {};
+    RasterizationState.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    RasterizationState.depthClampEnable        = VK_FALSE; // Don't clamp fragments within depth range.
+    RasterizationState.rasterizerDiscardEnable = VK_FALSE;
+    RasterizationState.polygonMode             = VK_POLYGON_MODE_FILL; // Only available mode on AMD gpus?
+    RasterizationState.cullMode                = VK_CULL_MODE_BACK_BIT;
+    RasterizationState.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    RasterizationState.depthBiasEnable         = VK_FALSE;
+    RasterizationState.depthBiasConstantFactor = 0.0f;
+    RasterizationState.depthBiasClamp          = 0.0f;
+    RasterizationState.depthBiasSlopeFactor    = 0.0f;
+    RasterizationState.lineWidth               = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo MultisampleState = {};
+    MultisampleState.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    MultisampleState.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
+    MultisampleState.sampleShadingEnable   = VK_FALSE;
+    MultisampleState.minSampleShading      = 1.0f;
+    MultisampleState.pSampleMask           = NULL;
+    MultisampleState.alphaToCoverageEnable = VK_FALSE;
+    MultisampleState.alphaToOneEnable      = VK_FALSE;
+
+    ////////////////////////////////////////////////////////////
+    /// Graphics Pipeline
+    ////////////////////////////////////////////////////////////
+    VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
+    GraphicsPipelineCreateInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    GraphicsPipelineCreateInfo.stageCount          = Config->ShaderStages.Count;
+    GraphicsPipelineCreateInfo.pStages             = Config->ShaderStages.Data;
+    GraphicsPipelineCreateInfo.pVertexInputState   = &Config->VertexInputState.State;
+    GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
+    GraphicsPipelineCreateInfo.pTessellationState  = NULL;
+    GraphicsPipelineCreateInfo.pViewportState      = &Config->ViewportState.State;
+    GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
+    GraphicsPipelineCreateInfo.pMultisampleState   = &MultisampleState;
+    // GraphicsPipelineCreateInfo.pDepthStencilState  = &depth_stencil_state_create_info;
+    // GraphicsPipelineCreateInfo.pColorBlendState    = &color_blend_state_create_info;
+    GraphicsPipelineCreateInfo.pDynamicState       = NULL;
+    // GraphicsPipelineCreateInfo.layout              = gfx_pipeline.layout;
+    // GraphicsPipelineCreateInfo.renderPass          = render_pass;
+    GraphicsPipelineCreateInfo.subpass             = 0;
+    GraphicsPipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
+    GraphicsPipelineCreateInfo.basePipelineIndex   = -1;
+
+    VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
+                                                VK_NULL_HANDLE, // Pipeline Cache
+                                                1,
+                                                &GraphicsPipelineCreateInfo,
+                                                NULL, // Allocation Callbacks
+                                                &GraphicsPipeline.Pipeline);
+    ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
     return GraphicsPipeline;
 }
 

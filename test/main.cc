@@ -118,13 +118,21 @@ main()
     vtk::shader_module FragmentShader =
         vtk::CreateShaderModule(Device.Logical, "assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
+    // Vertex Layout
+    vtk::vertex_layout VertexLayout = {};
+    u32 VertexPosition = vtk::PushVertexAttribute(&VertexLayout, 3);
+
     // Graphics Pipelines
-    VkPipelineShaderStageCreateInfo ShaderStages[] =
-    {
-        vtk::CreateShaderStage(&VertexShader),
-        vtk::CreateShaderStage(&FragmentShader),
-    };
-    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, ShaderStages, CTK_ARRAY_COUNT(ShaderStages));
+    ctk::static_array<vtk::vertex_input, 4> VertexInputs = {};
+    ctk::Push(&VertexInputs, { 0, 0, VertexPosition });
+
+    vtk::graphics_pipeline_config GraphicsPipelineConfig = {};
+    ctk::Push(&GraphicsPipelineConfig.ShaderStages, vtk::CreateShaderStage(&VertexShader));
+    ctk::Push(&GraphicsPipelineConfig.ShaderStages, vtk::CreateShaderStage(&FragmentShader));
+    GraphicsPipelineConfig.VertexInputState = vtk::CreateVertexInputState(&VertexInputs, &VertexLayout);
+    GraphicsPipelineConfig.ViewportState = vtk::CreateViewportState(Swapchain.Extent);
+
+    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, &GraphicsPipelineConfig);
 
     ////////////////////////////////////////////////////////////
     /// Main Loop
