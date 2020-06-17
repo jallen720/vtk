@@ -737,20 +737,6 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     return ShaderModule;
 }
 
-VkPipelineShaderStageCreateInfo
-CreateShaderStage(shader_module *ShaderModule)
-{
-    VkPipelineShaderStageCreateInfo CreateInfo = {};
-    CreateInfo.sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    CreateInfo.flags               = 0;
-    CreateInfo.stage               = ShaderModule->StageBit;
-    CreateInfo.module              = ShaderModule->Module;
-    CreateInfo.pName               = "main";
-    CreateInfo.pSpecializationInfo = NULL;
-
-    return CreateInfo;
-}
-
 u32
 PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
 {
@@ -769,77 +755,108 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     return AttributeIndex;
 }
 
-vertex_input_state
-CreateVertexInputState(ctk::static_array<vertex_input, 4> *VertexInputs, vertex_layout *VertexLayout)
-{
-    vertex_input_state VertexInputState = {};
-    for(u32 InputIndex = 0; InputIndex < VertexInputs->Count; InputIndex++)
-    {
-        vertex_input *VertexInput = At(VertexInputs, InputIndex);
-        vertex_attribute *VertexAttribute = VertexLayout->Attributes + VertexInput->AttributeIndex;
-
-        VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexInputState.AttributeDescriptions);
-        AttributeDescription->location = VertexInput->Location;
-        AttributeDescription->binding  = VertexInput->Binding;
-        AttributeDescription->format   = VertexAttribute->Format;
-        AttributeDescription->offset   = VertexAttribute->Offset;
-    }
-
-    VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexInputState.BindingDescriptions);
-    BindingDescription->binding   = 0;
-    BindingDescription->stride    = VertexLayout->Size;
-    BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    VkPipelineVertexInputStateCreateInfo *InputState = &VertexInputState.State;
-    InputState->sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    InputState->vertexBindingDescriptionCount   = VertexInputState.BindingDescriptions.Count;
-    InputState->pVertexBindingDescriptions      = VertexInputState.BindingDescriptions.Data;
-    InputState->vertexAttributeDescriptionCount = VertexInputState.AttributeDescriptions.Count;
-    InputState->pVertexAttributeDescriptions    = VertexInputState.AttributeDescriptions.Data;
-
-    return VertexInputState;
-}
-
-viewport_state
-CreateViewportState(VkExtent2D Extent)
-{
-    viewport_state ViewportState = {};
-
-    ViewportState.Viewport.x        = 0.0f;
-    ViewportState.Viewport.y        = 0.0f;
-    ViewportState.Viewport.width    = (f32)Extent.width;
-    ViewportState.Viewport.height   = (f32)Extent.height;
-    ViewportState.Viewport.minDepth = 0.0f;
-    ViewportState.Viewport.maxDepth = 1.0f;
-
-    // Make scissor fill viewport.
-    ViewportState.Scissor.offset.x      = 0;
-    ViewportState.Scissor.offset.y      = 0;
-    ViewportState.Scissor.extent.width  = ViewportState.Viewport.width;
-    ViewportState.Scissor.extent.height = ViewportState.Viewport.height;
-
-    ViewportState.State.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    ViewportState.State.viewportCount = 1;
-    ViewportState.State.pViewports    = &ViewportState.Viewport;
-    ViewportState.State.scissorCount  = 1;
-    ViewportState.State.pScissors     = &ViewportState.Scissor;
-
-    return ViewportState;
-}
-
 graphics_pipeline
 CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
 {
     graphics_pipeline GraphicsPipeline = {};
 
     ////////////////////////////////////////////////////////////
-    /// Configure State
+    /// Shader Stages
+    ////////////////////////////////////////////////////////////
+    ctk::static_array<VkPipelineShaderStageCreateInfo, 4> ShaderStages = {};
+    for(u32 ShaderModuleIndex = 0; ShaderModuleIndex < Config->ShaderModules.Count; ++ShaderModuleIndex)
+    {
+        shader_module *ShaderModule = Config->ShaderModules[ShaderModuleIndex];
+
+        VkPipelineShaderStageCreateInfo *CreateInfo = ctk::Push(&ShaderStages);
+        CreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        CreateInfo->flags               = 0;
+        CreateInfo->stage               = ShaderModule->StageBit;
+        CreateInfo->module              = ShaderModule->Module;
+        CreateInfo->pName               = "main";
+        CreateInfo->pSpecializationInfo = NULL;
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Vertex Input State
+    ////////////////////////////////////////////////////////////
+    ctk::static_array<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
+    ctk::static_array<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
+    for(u32 InputIndex = 0; InputIndex < Config->VertexInputs.Count; ++InputIndex)
+    {
+        vertex_input *VertexInput = At(&Config->VertexInputs, InputIndex);
+        vertex_attribute *VertexAttribute = Config->VertexLayout->Attributes + VertexInput->AttributeIndex;
+
+        VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexAttributeDescriptions);
+        AttributeDescription->location = VertexInput->Location;
+        AttributeDescription->binding  = VertexInput->Binding;
+        AttributeDescription->format   = VertexAttribute->Format;
+        AttributeDescription->offset   = VertexAttribute->Offset;
+    }
+
+    VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexBindingDescriptions);
+    BindingDescription->binding   = 0;
+    BindingDescription->stride    = Config->VertexLayout->Size;
+    BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkPipelineVertexInputStateCreateInfo VertexInputState = {};
+    VertexInputState.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    VertexInputState.vertexBindingDescriptionCount   = VertexBindingDescriptions.Count;
+    VertexInputState.pVertexBindingDescriptions      = VertexBindingDescriptions.Data;
+    VertexInputState.vertexAttributeDescriptionCount = VertexAttributeDescriptions.Count;
+    VertexInputState.pVertexAttributeDescriptions    = VertexAttributeDescriptions.Data;
+
+    ////////////////////////////////////////////////////////////
+    /// Input Assembly State
     ////////////////////////////////////////////////////////////
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
     InputAssemblyState.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     InputAssemblyState.topology               = Config->PrimitiveTopology;
     InputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
+    ////////////////////////////////////////////////////////////
+    /// Viewport State
+    ////////////////////////////////////////////////////////////
+    VkViewport Viewport = {};
+    Viewport.x        = 0.0f;
+    Viewport.y        = 0.0f;
+    Viewport.width    = (f32)Config->ViewportExtent.width;
+    Viewport.height   = (f32)Config->ViewportExtent.height;
+    Viewport.minDepth = 0.0f;
+    Viewport.maxDepth = 1.0f;
+
+    // Make scissor fill viewport.
+    VkRect2D Scissor = {};
+    Scissor.offset.x      = 0;
+    Scissor.offset.y      = 0;
+    Scissor.extent.width  = Viewport.width;
+    Scissor.extent.height = Viewport.height;
+
+    VkPipelineViewportStateCreateInfo ViewportState = {};
+    ViewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    ViewportState.viewportCount = 1;
+    ViewportState.pViewports    = &Viewport;
+    ViewportState.scissorCount  = 1;
+    ViewportState.pScissors     = &Scissor;
+
+    ////////////////////////////////////////////////////////////
+    /// Depth Stencil State
+    ////////////////////////////////////////////////////////////
+    VkPipelineDepthStencilStateCreateInfo DepthStencilState = {};
+    DepthStencilState.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    DepthStencilState.depthTestEnable       = Config->DepthTesting;
+    DepthStencilState.depthWriteEnable      = Config->DepthTesting;
+    DepthStencilState.depthCompareOp        = VK_COMPARE_OP_LESS;
+    DepthStencilState.depthBoundsTestEnable = VK_FALSE;
+    DepthStencilState.stencilTestEnable     = VK_FALSE;
+    DepthStencilState.front                 = {};
+    DepthStencilState.back                  = {};
+    DepthStencilState.minDepthBounds        = 0.0f;
+    DepthStencilState.maxDepthBounds        = 1.0f;
+
+    ////////////////////////////////////////////////////////////
+    /// Default State
+    ////////////////////////////////////////////////////////////
     VkPipelineRasterizationStateCreateInfo RasterizationState = {};
     RasterizationState.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     RasterizationState.depthClampEnable        = VK_FALSE; // Don't clamp fragments within depth range.
@@ -862,21 +879,45 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     MultisampleState.alphaToCoverageEnable = VK_FALSE;
     MultisampleState.alphaToOneEnable      = VK_FALSE;
 
+    VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
+    ColorBlendAttachmentState.blendEnable         = VK_FALSE;
+    ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.colorBlendOp        = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.alphaBlendOp        = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT |
+                                                    VK_COLOR_COMPONENT_G_BIT |
+                                                    VK_COLOR_COMPONENT_B_BIT |
+                                                    VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo ColorBlendState = {};
+    ColorBlendState.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    ColorBlendState.logicOpEnable     = VK_FALSE;
+    ColorBlendState.logicOp           = VK_LOGIC_OP_COPY;
+    ColorBlendState.attachmentCount   = 1;
+    ColorBlendState.pAttachments      = &ColorBlendAttachmentState;
+    ColorBlendState.blendConstants[0] = 0.0f;
+    ColorBlendState.blendConstants[1] = 0.0f;
+    ColorBlendState.blendConstants[2] = 0.0f;
+    ColorBlendState.blendConstants[3] = 0.0f;
+
     ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
     ////////////////////////////////////////////////////////////
     VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
     GraphicsPipelineCreateInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    GraphicsPipelineCreateInfo.stageCount          = Config->ShaderStages.Count;
-    GraphicsPipelineCreateInfo.pStages             = Config->ShaderStages.Data;
-    GraphicsPipelineCreateInfo.pVertexInputState   = &Config->VertexInputState.State;
+    GraphicsPipelineCreateInfo.stageCount          = ShaderStages.Count;
+    GraphicsPipelineCreateInfo.pStages             = ShaderStages.Data;
+    GraphicsPipelineCreateInfo.pVertexInputState   = &VertexInputState;
     GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
     GraphicsPipelineCreateInfo.pTessellationState  = NULL;
-    GraphicsPipelineCreateInfo.pViewportState      = &Config->ViewportState.State;
+    GraphicsPipelineCreateInfo.pViewportState      = &ViewportState;
     GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
     GraphicsPipelineCreateInfo.pMultisampleState   = &MultisampleState;
-    // GraphicsPipelineCreateInfo.pDepthStencilState  = &depth_stencil_state_create_info;
-    // GraphicsPipelineCreateInfo.pColorBlendState    = &color_blend_state_create_info;
+    GraphicsPipelineCreateInfo.pDepthStencilState  = &DepthStencilState;
+    GraphicsPipelineCreateInfo.pColorBlendState    = &ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState       = NULL;
     // GraphicsPipelineCreateInfo.layout              = gfx_pipeline.layout;
     // GraphicsPipelineCreateInfo.renderPass          = render_pass;

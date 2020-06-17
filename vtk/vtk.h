@@ -105,26 +105,14 @@ struct vertex_input
     u32 AttributeIndex;
 };
 
-struct vertex_input_state
-{
-    ctk::static_array<VkVertexInputAttributeDescription, 4> AttributeDescriptions;
-    ctk::static_array<VkVertexInputBindingDescription, 4>   BindingDescriptions;
-    VkPipelineVertexInputStateCreateInfo                    State;
-};
-
-struct viewport_state
-{
-    VkViewport                        Viewport;
-    VkRect2D                          Scissor;
-    VkPipelineViewportStateCreateInfo State;
-};
-
 struct graphics_pipeline_config
 {
-    ctk::static_array<VkPipelineShaderStageCreateInfo, 2> ShaderStages;
-    vertex_input_state                                    VertexInputState;
-    viewport_state                                        ViewportState;
-    VkPrimitiveTopology                                   PrimitiveTopology;
+    ctk::static_array<shader_module *, 4> ShaderModules;
+    ctk::static_array<vertex_input, 4>    VertexInputs;
+    vertex_layout                         *VertexLayout;
+    VkExtent2D                            ViewportExtent;
+    VkPrimitiveTopology                   PrimitiveTopology;
+    VkBool32                              DepthTesting;
 };
 
 struct graphics_pipeline
@@ -160,20 +148,8 @@ shader_module
 CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit);
 
 VTK_API
-VkPipelineShaderStageCreateInfo
-CreateShaderStage(shader_module *ShaderModule);
-
-VTK_API
 u32
 PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount);
-
-VTK_API
-vertex_input_state
-CreateVertexInputState(ctk::static_array<vertex_input, 4> *VertexInputs, vertex_layout *VertexLayout);
-
-VTK_API
-viewport_state
-CreateViewportState(VkExtent2D Extent);
 
 VTK_API
 graphics_pipeline

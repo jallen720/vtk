@@ -110,7 +110,7 @@ main()
     };
     vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(VertexData), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    vtk::WriteToHostCoherentBuffer(Device.Logical, &VertexBuffer, VertexData, sizeof(VertexData) - 1, 1);
+    vtk::WriteToHostCoherentBuffer(Device.Logical, &VertexBuffer, VertexData, sizeof(VertexData), 0);
 
     // Shader Modules
     vtk::shader_module VertexShader =
@@ -123,14 +123,14 @@ main()
     u32 VertexPosition = vtk::PushVertexAttribute(&VertexLayout, 3);
 
     // Graphics Pipelines
-    ctk::static_array<vtk::vertex_input, 4> VertexInputs = {};
-    ctk::Push(&VertexInputs, { 0, 0, VertexPosition });
-
     vtk::graphics_pipeline_config GraphicsPipelineConfig = {};
-    ctk::Push(&GraphicsPipelineConfig.ShaderStages, vtk::CreateShaderStage(&VertexShader));
-    ctk::Push(&GraphicsPipelineConfig.ShaderStages, vtk::CreateShaderStage(&FragmentShader));
-    GraphicsPipelineConfig.VertexInputState = vtk::CreateVertexInputState(&VertexInputs, &VertexLayout);
-    GraphicsPipelineConfig.ViewportState = vtk::CreateViewportState(Swapchain.Extent);
+    ctk::Push(&GraphicsPipelineConfig.ShaderModules, &VertexShader);
+    ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
+    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPosition });
+    GraphicsPipelineConfig.VertexLayout      = &VertexLayout;
+    GraphicsPipelineConfig.ViewportExtent    = Swapchain.Extent;
+    GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipelineConfig.DepthTesting      = VK_TRUE;
 
     vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, &GraphicsPipelineConfig);
 
