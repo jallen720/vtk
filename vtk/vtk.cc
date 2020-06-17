@@ -904,6 +904,21 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     ColorBlendState.blendConstants[3] = 0.0f;
 
     ////////////////////////////////////////////////////////////
+    /// Pipeline Layout
+    ////////////////////////////////////////////////////////////
+    VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
+    LayoutCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    LayoutCreateInfo.setLayoutCount         = 0;
+    LayoutCreateInfo.pSetLayouts            = NULL;
+    LayoutCreateInfo.pushConstantRangeCount = 0;
+    LayoutCreateInfo.pPushConstantRanges    = NULL;
+
+    {
+        VkResult Result = vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout);
+        ValidateVkResult(Result, "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
+    }
+
+    ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
     ////////////////////////////////////////////////////////////
     VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
@@ -919,19 +934,22 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     GraphicsPipelineCreateInfo.pDepthStencilState  = &DepthStencilState;
     GraphicsPipelineCreateInfo.pColorBlendState    = &ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState       = NULL;
-    // GraphicsPipelineCreateInfo.layout              = gfx_pipeline.layout;
+    GraphicsPipelineCreateInfo.layout              = GraphicsPipeline.Layout;
     // GraphicsPipelineCreateInfo.renderPass          = render_pass;
     GraphicsPipelineCreateInfo.subpass             = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex   = -1;
 
-    VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
-                                                VK_NULL_HANDLE, // Pipeline Cache
-                                                1,
-                                                &GraphicsPipelineCreateInfo,
-                                                NULL, // Allocation Callbacks
-                                                &GraphicsPipeline.Pipeline);
-    ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
+    {
+        VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
+                                                    VK_NULL_HANDLE, // Pipeline Cache
+                                                    1,
+                                                    &GraphicsPipelineCreateInfo,
+                                                    NULL, // Allocation Callbacks
+                                                    &GraphicsPipeline.Pipeline);
+        ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
+    }
+
     return GraphicsPipeline;
 }
 

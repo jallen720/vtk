@@ -117,7 +117,8 @@ struct graphics_pipeline_config
 
 struct graphics_pipeline
 {
-    VkPipeline Pipeline;
+    VkPipeline       Pipeline;
+    VkPipelineLayout Layout;
 };
 
 ////////////////////////////////////////////////////////////
