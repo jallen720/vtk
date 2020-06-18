@@ -280,6 +280,30 @@ FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties * MemoryProperties, u32 Mem
     CTK_FATAL("failed to find memory type")
 }
 
+static VkSemaphore
+CreateSemaphore(VkDevice LogicalDevice)
+{
+    VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
+    SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    SemaphoreCreateInfo.flags = 0;
+    VkSemaphore Semaphore = {};
+    VkResult Result = vkCreateSemaphore(LogicalDevice, &SemaphoreCreateInfo, NULL, &Semaphore);
+    ValidateVkResult(Result, "vkCreateSemaphore", "failed to create semaphore");
+    return Semaphore;
+}
+
+static VkFence
+CreateFence(VkDevice LogicalDevice)
+{
+    VkFenceCreateInfo FenceCreateInfo = {};
+    FenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VkFence Fence = {};
+    VkResult Result = vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence);
+    ValidateVkResult(Result, "vkCreateFence", "failed to create fence");
+    return Fence;
+}
+
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
@@ -553,8 +577,10 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     /// Configuration
     ////////////////////////////////////////////////////////////
 
+    // Configure swapchain based on surface properties.
+
     // Default to first surface format.
-    VkSurfaceFormatKHR SelectedSurfaceFormat = Device->SurfaceFormats[0];
+    VkSurfaceFormatKHR SelectedFormat = Device->SurfaceFormats[0];
     for(u32 SurfaceFormatIndex = 0; SurfaceFormatIndex < Device->SurfaceFormats.Count; ++SurfaceFormatIndex)
     {
         VkSurfaceFormatKHR SurfaceFormat = Device->SurfaceFormats[SurfaceFormatIndex];
@@ -562,13 +588,13 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
         // Prefer 4-component 8-bit BGRA unsigned normalized format and sRGB color space.
         if(SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
-            SelectedSurfaceFormat = SurfaceFormat;
+            SelectedFormat = SurfaceFormat;
             break;
         }
     }
 
     // Default to FIFO (only present mode with guarenteed availability).
-    VkPresentModeKHR SelectedSurfacePresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR SelectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
     for(u32 SurfacePresentModeIndex = 0; SurfacePresentModeIndex < Device->SurfacePresentModes.Count; ++SurfacePresentModeIndex)
     {
         VkPresentModeKHR SurfacePresentMode = Device->SurfacePresentModes[SurfacePresentModeIndex];
@@ -576,7 +602,7 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
         // Mailbox is the preferred present mode if available.
         if(SurfacePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
         {
-            SelectedSurfacePresentMode = SurfacePresentMode;
+            SelectedPresentMode = SurfacePresentMode;
             break;
         }
     }
@@ -606,14 +632,14 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     SwapchainCreateInfo.surface          = PlatformSurface;
     SwapchainCreateInfo.flags            = 0;
     SwapchainCreateInfo.minImageCount    = SelectedImageCount;
-    SwapchainCreateInfo.imageFormat      = SelectedSurfaceFormat.format;
-    SwapchainCreateInfo.imageColorSpace  = SelectedSurfaceFormat.colorSpace;
+    SwapchainCreateInfo.imageFormat      = SelectedFormat.format;
+    SwapchainCreateInfo.imageColorSpace  = SelectedFormat.colorSpace;
     SwapchainCreateInfo.imageExtent      = Device->SurfaceCapabilities.currentExtent;
     SwapchainCreateInfo.imageArrayLayers = 1; // Always 1 for standard images.
     SwapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     SwapchainCreateInfo.preTransform     = Device->SurfaceCapabilities.currentTransform;
     SwapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    SwapchainCreateInfo.presentMode      = SelectedSurfacePresentMode;
+    SwapchainCreateInfo.presentMode      = SelectedPresentMode;
     SwapchainCreateInfo.clipped          = VK_TRUE;
     SwapchainCreateInfo.oldSwapchain     = VK_NULL_HANDLE;
     if(GraphicsQueueFamilyIndex != PresentQueueFamilyIndex)
@@ -640,11 +666,11 @@ CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
     {
         swapchain_image *SwapchainImage = ctk::Push(&Swapchain.Images);
         SwapchainImage->Image = Images[ImageIndex];
-        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Image, SelectedSurfaceFormat.format,
-                                               VK_IMAGE_ASPECT_COLOR_BIT);
+        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Image, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    // Cache swapchain extent for future reference.
+    // Store surface state used to create swapchain for future reference.
+    Swapchain.ImageFormat = SelectedFormat.format;
     Swapchain.Extent = Device->SurfaceCapabilities.currentExtent;
 
     // Cleanup
@@ -714,12 +740,117 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     return Buffer;
 }
 
+render_pass
+CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
+{
+    render_pass RenderPass = {};
+
+    ////////////////////////////////////////////////////////////
+    /// Attachments
+    ////////////////////////////////////////////////////////////
+    ctk::static_array<VkAttachmentDescription, 4> AttachmentDescriptions = {};
+    for(u32 AttachmentIndex = 0; AttachmentIndex < Config->Attachments.Count; ++AttachmentIndex)
+    {
+        // Create attachment description.
+        attachment *Attachment = Config->Attachments + AttachmentIndex;
+        VkAttachmentDescription *AttachmentDescription = ctk::Push(&AttachmentDescriptions);
+        AttachmentDescription->format         = Attachment->Format;
+        AttachmentDescription->samples        = VK_SAMPLE_COUNT_1_BIT;
+        AttachmentDescription->loadOp         = Attachment->LoadOp; // Clear color attachment before drawing.
+        AttachmentDescription->storeOp        = Attachment->StoreOp; // Store rendered contents in memory.
+        AttachmentDescription->stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
+        AttachmentDescription->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
+        AttachmentDescription->initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
+        AttachmentDescription->finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        // Store clear value if attachment uses a clear load operation.
+        if(Attachment->LoadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+        {
+            ctk::Push(&RenderPass.ClearValues, Attachment->ClearValue);
+        }
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Subpasses
+    ////////////////////////////////////////////////////////////
+    ctk::static_array<VkSubpassDescription, 4> SubpassDescriptions = {};
+    for(u32 SubpassIndex = 0; SubpassIndex < Config->Subpasses.Count; ++SubpassIndex)
+    {
+        subpass *Subpass = At(&Config->Subpasses, SubpassIndex);
+        VkSubpassDescription *SubpassDescription = ctk::Push(&SubpassDescriptions);
+        SubpassDescription->pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        SubpassDescription->inputAttachmentCount    = 0;
+        SubpassDescription->pInputAttachments       = NULL;
+        SubpassDescription->colorAttachmentCount    = Subpass->ColorAttachmentReferences.Count;
+        SubpassDescription->pColorAttachments       = Subpass->ColorAttachmentReferences.Data;
+        SubpassDescription->pResolveAttachments     = NULL;
+        SubpassDescription->pDepthStencilAttachment = Subpass->DepthAttachmentReference ? &Subpass->DepthAttachmentReference.Value : NULL;
+        SubpassDescription->preserveAttachmentCount = 0;
+        SubpassDescription->pPreserveAttachments    = NULL;
+    }
+
+    VkSubpassDependency SubpassDependencies[1] = {};
+    SubpassDependencies[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
+    SubpassDependencies[0].dstSubpass    = 0;
+    SubpassDependencies[0].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SubpassDependencies[0].srcAccessMask = 0;
+    SubpassDependencies[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SubpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    ////////////////////////////////////////////////////////////
+    /// Render Pass
+    ////////////////////////////////////////////////////////////
+    VkRenderPassCreateInfo RenderPassCreateInfo = {};
+    RenderPassCreateInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    RenderPassCreateInfo.attachmentCount = AttachmentDescriptions.Count;
+    RenderPassCreateInfo.pAttachments    = AttachmentDescriptions.Data;
+    RenderPassCreateInfo.subpassCount    = SubpassDescriptions.Count;
+    RenderPassCreateInfo.pSubpasses      = SubpassDescriptions.Data;
+    RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
+    RenderPassCreateInfo.pDependencies   = SubpassDependencies;
+
+    VkResult Result = vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.RenderPass);
+    ValidateVkResult(Result, "vkCreateRenderPass", "failed to create render pass");
+
+    return RenderPass;
+}
+
+VkFramebuffer
+CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_config *Config)
+{
+    VkFramebufferCreateInfo FramebufferCreateInfo = {};
+    FramebufferCreateInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    FramebufferCreateInfo.renderPass      = RenderPass;
+    FramebufferCreateInfo.attachmentCount = Config->Attachments.Count;
+    FramebufferCreateInfo.pAttachments    = Config->Attachments.Data;
+    FramebufferCreateInfo.width           = Config->Extent.width;
+    FramebufferCreateInfo.height          = Config->Extent.height;
+    FramebufferCreateInfo.layers          = Config->Layers;
+
+    VkFramebuffer Framebuffer = {};
+    VkResult Result = vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer);
+    ValidateVkResult(Result, "vkCreateFramebuffer", "failed to create framebuffer");
+    return Framebuffer;
+}
+
+void
+AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
+{
+    VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
+    CommandBufferAllocateInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    CommandBufferAllocateInfo.commandPool        = CommandPool;
+    CommandBufferAllocateInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CommandBufferAllocateInfo.commandBufferCount = Count;
+
+    VkResult Result = vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers);
+    ValidateVkResult(Result, "vkAllocateCommandBuffers", "failed to allocate command buffer");
+}
+
 shader_module
 CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit)
 {
     shader_module ShaderModule = {};
     ShaderModule.StageBit = StageBit;
-    ctk::Warning("read shader bytecode as const u32?");
     ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Path);
 
     VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
@@ -756,7 +887,7 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
 }
 
 graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
+CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_config *Config)
 {
     graphics_pipeline GraphicsPipeline = {};
 
@@ -768,13 +899,13 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     {
         shader_module *ShaderModule = Config->ShaderModules[ShaderModuleIndex];
 
-        VkPipelineShaderStageCreateInfo *CreateInfo = ctk::Push(&ShaderStages);
-        CreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        CreateInfo->flags               = 0;
-        CreateInfo->stage               = ShaderModule->StageBit;
-        CreateInfo->module              = ShaderModule->Module;
-        CreateInfo->pName               = "main";
-        CreateInfo->pSpecializationInfo = NULL;
+        VkPipelineShaderStageCreateInfo *ShaderStageCreateInfo = ctk::Push(&ShaderStages);
+        ShaderStageCreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        ShaderStageCreateInfo->flags               = 0;
+        ShaderStageCreateInfo->stage               = ShaderModule->StageBit;
+        ShaderStageCreateInfo->module              = ShaderModule->Module;
+        ShaderStageCreateInfo->pName               = "main";
+        ShaderStageCreateInfo->pSpecializationInfo = NULL;
     }
 
     ////////////////////////////////////////////////////////////
@@ -935,7 +1066,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     GraphicsPipelineCreateInfo.pColorBlendState    = &ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState       = NULL;
     GraphicsPipelineCreateInfo.layout              = GraphicsPipeline.Layout;
-    // GraphicsPipelineCreateInfo.renderPass          = render_pass;
+    GraphicsPipelineCreateInfo.renderPass          = RenderPass;
     GraphicsPipelineCreateInfo.subpass             = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex   = -1;
@@ -951,6 +1082,24 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config)
     }
 
     return GraphicsPipeline;
+}
+
+frame_state
+CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount)
+{
+    frame_state FrameState = {};
+    for(u32 _ = 0; _ < FrameCount; ++_)
+    {
+        frame *Frame = ctk::Push(&FrameState.Frames);
+        Frame->ImageAquiredSemaphore   = CreateSemaphore(LogicalDevice);
+        Frame->RenderFinishedSemaphore = CreateSemaphore(LogicalDevice);
+        Frame->InFlightFence           = CreateFence(LogicalDevice);
+    }
+    for(u32 _ = 0; _ < SwapchainImageCount; ++_)
+    {
+        ctk::Push(&FrameState.PreviousFrameInFlightFences, (VkFence)VK_NULL_HANDLE);
+    }
+    return FrameState;
 }
 
 void

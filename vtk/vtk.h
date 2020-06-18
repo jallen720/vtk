@@ -68,6 +68,7 @@ struct swapchain
 {
     VkSwapchainKHR                        Swapchain;
     ctk::static_array<swapchain_image, 4> Images;
+    VkFormat                              ImageFormat;
     VkExtent2D                            Extent;
 };
 
@@ -75,8 +76,39 @@ struct buffer
 {
     VkBuffer       Buffer;
     VkDeviceMemory Memory;
-    u32            ElementCount;
-    u32            ElementSize;
+};
+
+struct attachment
+{
+    VkFormat            Format;
+    VkAttachmentLoadOp  LoadOp;
+    VkAttachmentStoreOp StoreOp;
+    VkClearValue        ClearValue;
+};
+
+struct subpass
+{
+    ctk::static_array<VkAttachmentReference, 4> ColorAttachmentReferences;
+    ctk::optional<VkAttachmentReference>        DepthAttachmentReference;
+};
+
+struct render_pass_config
+{
+    ctk::static_array<attachment, 4> Attachments;
+    ctk::static_array<subpass, 4>    Subpasses;
+};
+
+struct render_pass
+{
+    VkRenderPass                       RenderPass;
+    ctk::static_array<VkClearValue, 4> ClearValues;
+};
+
+struct framebuffer_config
+{
+    ctk::static_array<VkImageView, 4> Attachments;
+    VkExtent2D                        Extent;
+    u32                               Layers;
 };
 
 struct shader_module
@@ -121,6 +153,20 @@ struct graphics_pipeline
     VkPipelineLayout Layout;
 };
 
+struct frame
+{
+    VkSemaphore ImageAquiredSemaphore;
+    VkSemaphore RenderFinishedSemaphore;
+    VkFence     InFlightFence;
+};
+
+struct frame_state
+{
+    ctk::static_array<frame, 4>   Frames;
+    ctk::static_array<VkFence, 4> PreviousFrameInFlightFences;
+    u32                           CurrentFrameIndex;
+};
+
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
@@ -145,6 +191,18 @@ buffer
 CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags);
 
 VTK_API
+render_pass
+CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config);
+
+VTK_API
+VkFramebuffer
+CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_config *Config);
+
+VTK_API
+void
+AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers);
+
+VTK_API
 shader_module
 CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit);
 
@@ -154,7 +212,11 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount);
 
 VTK_API
 graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, graphics_pipeline_config *Config);
+CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_config *Config);
+
+VTK_API
+frame_state
+CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount);
 
 VTK_API
 void
