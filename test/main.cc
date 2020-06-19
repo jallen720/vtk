@@ -110,11 +110,16 @@ main()
     ////////////////////////////////////////////////////////////
     /// Data
     ////////////////////////////////////////////////////////////
-    ctk::vec3<f32> Vertexes[] =
+    struct vertex
     {
-        {  0.75f,  0.75f, 0.0f },
-        {  0.0f,  -0.75f, 0.0f },
-        { -0.75f,  0.75f, 0.0f },
+        ctk::vec3<f32> Position;
+        ctk::vec4<f32> Color;
+    };
+    vertex Vertexes[] =
+    {
+        { {  0.75f,  0.75f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+        { {  0.0f,  -0.75f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+        { { -0.75f,  0.75f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
     };
     vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -171,6 +176,7 @@ main()
     ////////////////////////////////////////////////////////////
     vtk::vertex_layout VertexLayout = {};
     u32 VertexPositionIndex = vtk::PushVertexAttribute(&VertexLayout, 3);
+    u32 VertexColorIndex = vtk::PushVertexAttribute(&VertexLayout, 4);
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
@@ -179,6 +185,7 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &VertexShader);
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
+    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
     GraphicsPipelineConfig.VertexLayout      = &VertexLayout;
     GraphicsPipelineConfig.ViewportExtent    = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
