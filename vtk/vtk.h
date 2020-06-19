@@ -20,10 +20,10 @@ namespace vtk {
 ////////////////////////////////////////////////////////////
 struct instance_config
 {
-    ctk::static_array<cstr, 8> Layers;
-    ctk::static_array<cstr, 8> Extensions;
-    b32                        Debug;
-    cstr                       AppName;
+    ctk::sarray<cstr, 8> Layers;
+    ctk::sarray<cstr, 8> Extensions;
+    b32                  Debug;
+    cstr                 AppName;
 };
 
 struct instance
@@ -34,8 +34,8 @@ struct instance
 
 struct device_config
 {
-    ctk::static_array<cstr, 8> Extensions;
-    VkPhysicalDeviceFeatures   Features;
+    ctk::sarray<cstr, 8>     Extensions;
+    VkPhysicalDeviceFeatures Features;
 };
 
 struct queue_family_indexes
@@ -66,10 +66,10 @@ struct swapchain_image
 
 struct swapchain
 {
-    VkSwapchainKHR                        Handle;
-    ctk::static_array<swapchain_image, 4> Images;
-    VkFormat                              ImageFormat;
-    VkExtent2D                            Extent;
+    VkSwapchainKHR                  Handle;
+    ctk::sarray<swapchain_image, 4> Images;
+    VkFormat                        ImageFormat;
+    VkExtent2D                      Extent;
 };
 
 struct buffer
@@ -88,27 +88,27 @@ struct attachment
 
 struct subpass
 {
-    ctk::static_array<VkAttachmentReference, 4> ColorAttachmentReferences;
-    ctk::optional<VkAttachmentReference>        DepthAttachmentReference;
+    ctk::sarray<VkAttachmentReference, 4> ColorAttachmentReferences;
+    ctk::optional<VkAttachmentReference>  DepthAttachmentReference;
 };
 
 struct render_pass_config
 {
-    ctk::static_array<attachment, 4> Attachments;
-    ctk::static_array<subpass, 4>    Subpasses;
+    ctk::sarray<attachment, 4> Attachments;
+    ctk::sarray<subpass, 4>    Subpasses;
 };
 
 struct render_pass
 {
-    VkRenderPass                       Handle;
-    ctk::static_array<VkClearValue, 4> ClearValues;
+    VkRenderPass                 Handle;
+    ctk::sarray<VkClearValue, 4> ClearValues;
 };
 
 struct framebuffer_config
 {
-    ctk::static_array<VkImageView, 4> Attachments;
-    VkExtent2D                        Extent;
-    u32                               Layers;
+    ctk::sarray<VkImageView, 4> Attachments;
+    VkExtent2D                  Extent;
+    u32                         Layers;
 };
 
 struct shader_module
@@ -126,8 +126,8 @@ struct vertex_attribute
 
 struct vertex_layout
 {
-    ctk::static_array<vertex_attribute, 4> Attributes;
-    u32                                    Size;
+    ctk::sarray<vertex_attribute, 4> Attributes;
+    u32                              Size;
 };
 
 struct vertex_input
@@ -139,12 +139,12 @@ struct vertex_input
 
 struct graphics_pipeline_config
 {
-    ctk::static_array<shader_module *, 4> ShaderModules;
-    ctk::static_array<vertex_input, 4>    VertexInputs;
-    vertex_layout                         *VertexLayout;
-    VkExtent2D                            ViewportExtent;
-    VkPrimitiveTopology                   PrimitiveTopology;
-    VkBool32                              DepthTesting;
+    ctk::sarray<shader_module *, 4> ShaderModules;
+    ctk::sarray<vertex_input, 4>    VertexInputs;
+    vertex_layout                   *VertexLayout;
+    VkExtent2D                      ViewportExtent;
+    VkPrimitiveTopology             PrimitiveTopology;
+    VkBool32                        DepthTesting;
 };
 
 struct graphics_pipeline
@@ -162,9 +162,9 @@ struct frame
 
 struct frame_state
 {
-    ctk::static_array<frame, 4>   Frames;
-    ctk::static_array<VkFence, 4> PreviousFrameInFlightFences;
-    u32                           CurrentFrameIndex;
+    ctk::sarray<frame, 4>   Frames;
+    ctk::sarray<VkFence, 4> PreviousFrameInFlightFences;
+    u32                     CurrentFrameIndex;
 };
 
 ////////////////////////////////////////////////////////////

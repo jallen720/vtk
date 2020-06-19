@@ -149,7 +149,7 @@ main()
     vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, &RenderPassConfig);
 
     // Framebuffers
-    ctk::static_array<VkFramebuffer, 4> Framebuffers = {};
+    ctk::sarray<VkFramebuffer, 4> Framebuffers = {};
     for(u32 FramebufferIndex = 0; FramebufferIndex < Swapchain.Images.Count; ++FramebufferIndex)
     {
         vtk::framebuffer_config FramebufferConfig = {};
@@ -160,7 +160,7 @@ main()
     }
 
     // Command Buffers
-    ctk::static_array<VkCommandBuffer, 4> CommandBuffers = {};
+    ctk::sarray<VkCommandBuffer, 4> CommandBuffers = {};
     vtk::AllocateCommandBuffers(Device.Logical, GraphicsCommandPool, Swapchain.Images.Count, CommandBuffers.Data);
 
     ////////////////////////////////////////////////////////////

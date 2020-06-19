@@ -150,7 +150,7 @@ ExtensionName(VkExtensionProperties *Properties)
 
 template<typename properties, typename name_selector, u32 size>
 static b32
-AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
+AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
 {
     b32 AllSupported = true;
     for(u32 AddOnIndex = 0; AddOnIndex < AddOnNames->Count; ++AddOnIndex)
@@ -177,7 +177,7 @@ AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, ctk::array<properties
 
 template<typename properties, typename name_selector, typename loader, u32 size, typename ...args>
 static b32
-AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, name_selector NameSelector, loader Loader, args... Args)
+AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, name_selector NameSelector, loader Loader, args... Args)
 {
     auto SupportedAddOns = LoadVkObjects<properties>(Loader, Args...);
     b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, NameSelector);
@@ -187,8 +187,8 @@ AddOnsSupported(ctk::static_array<cstr, size> *AddOnNames, name_selector NameSel
 
 template<u32 size>
 static VkInstance
-CreateVkInstance(cstr AppName, ctk::static_array<cstr, size> *Extensions, ctk::static_array<cstr, size> *Layers,
-                 VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
+CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sarray<cstr, size> *Layers,
+                     VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
 {
     VkApplicationInfo AppInfo = {};
     AppInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -347,7 +347,7 @@ CreateInstance(instance_config *Config)
         DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
         DebugUtilsMessengerCreateInfo.pUserData       = NULL;
 
-        Instance.Handle = CreateVkInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
+        Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
         LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
         VkResult Result = vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
@@ -356,7 +356,7 @@ CreateInstance(instance_config *Config)
     }
     else
     {
-        Instance.Handle = CreateVkInstance(Config->AppName, Extensions, Layers, NULL);
+        Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, NULL);
     }
     return Instance;
 }
@@ -536,7 +536,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     ////////////////////////////////////////////////////////////
     /// Logical Device
     ////////////////////////////////////////////////////////////
-    ctk::static_array<VkDeviceQueueCreateInfo, 2> QueueCreateInfos = {};
+    ctk::sarray<VkDeviceQueueCreateInfo, 2> QueueCreateInfos = {};
     Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.QueueFamilyIndexes.Graphics));
     if(Device.QueueFamilyIndexes.Present != Device.QueueFamilyIndexes.Graphics)
     {
@@ -750,7 +750,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     ////////////////////////////////////////////////////////////
     /// Attachments
     ////////////////////////////////////////////////////////////
-    ctk::static_array<VkAttachmentDescription, 4> AttachmentDescriptions = {};
+    ctk::sarray<VkAttachmentDescription, 4> AttachmentDescriptions = {};
     for(u32 AttachmentIndex = 0; AttachmentIndex < Config->Attachments.Count; ++AttachmentIndex)
     {
         attachment *Attachment = Config->Attachments + AttachmentIndex;
@@ -774,7 +774,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     ////////////////////////////////////////////////////////////
     /// Subpasses
     ////////////////////////////////////////////////////////////
-    ctk::static_array<VkSubpassDescription, 4> SubpassDescriptions = {};
+    ctk::sarray<VkSubpassDescription, 4> SubpassDescriptions = {};
     for(u32 SubpassIndex = 0; SubpassIndex < Config->Subpasses.Count; ++SubpassIndex)
     {
         subpass *Subpass = At(&Config->Subpasses, SubpassIndex);
@@ -895,7 +895,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     /// Shader Stages
     ////////////////////////////////////////////////////////////
-    ctk::static_array<VkPipelineShaderStageCreateInfo, 4> ShaderStages = {};
+    ctk::sarray<VkPipelineShaderStageCreateInfo, 4> ShaderStages = {};
     for(u32 ShaderModuleIndex = 0; ShaderModuleIndex < Config->ShaderModules.Count; ++ShaderModuleIndex)
     {
         shader_module *ShaderModule = Config->ShaderModules[ShaderModuleIndex];
@@ -912,8 +912,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     /// Vertex Input State
     ////////////////////////////////////////////////////////////
-    ctk::static_array<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
-    ctk::static_array<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
+    ctk::sarray<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
+    ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
     for(u32 InputIndex = 0; InputIndex < Config->VertexInputs.Count; ++InputIndex)
     {
         vertex_input *VertexInput = At(&Config->VertexInputs, InputIndex);
