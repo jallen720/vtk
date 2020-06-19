@@ -102,7 +102,7 @@ main()
     vtk::device Device = vtk::CreateDevice(Instance.Instance, PlatformSurface, &DeviceConfig);
 
     // Swapchain
-    vtk::swapchain Swapchain = vtk::CreateSwapchain(PlatformSurface, &Device);
+    vtk::swapchain Swapchain = vtk::CreateSwapchain(&Device, PlatformSurface);
 
     // Graphics Command Pool
     VkCommandPool GraphicsCommandPool = vtk::CreateCommandPool(Device.Logical, Device.QueueFamilyIndexes.Graphics);

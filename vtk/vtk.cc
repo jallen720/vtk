@@ -569,7 +569,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
 }
 
 swapchain
-CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device)
+CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
 {
     swapchain Swapchain = {};
 
@@ -728,8 +728,10 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     // NVIDIA GTX 1080. The right way to allocate memory for a large number of objects at the same time is to create a
     // custom allocator that splits up a single allocation among many different objects by using the offset parameters
     // that we've seen in many functions.
-    VkResult allocate_memory_result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory);
-    ValidateVkResult(allocate_memory_result, "vkAllocateMemory", "failed to allocate memory for buffer");
+    {
+        VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory);
+        ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for buffer");
+    }
 
     // Bind device memory to buffer object.
     {
@@ -751,7 +753,6 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     ctk::static_array<VkAttachmentDescription, 4> AttachmentDescriptions = {};
     for(u32 AttachmentIndex = 0; AttachmentIndex < Config->Attachments.Count; ++AttachmentIndex)
     {
-        // Create attachment description.
         attachment *Attachment = Config->Attachments + AttachmentIndex;
         VkAttachmentDescription *AttachmentDescription = ctk::Push(&AttachmentDescriptions);
         AttachmentDescription->format         = Attachment->Format;
@@ -1043,7 +1044,6 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     LayoutCreateInfo.pSetLayouts            = NULL;
     LayoutCreateInfo.pushConstantRangeCount = 0;
     LayoutCreateInfo.pPushConstantRanges    = NULL;
-
     {
         VkResult Result = vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout);
         ValidateVkResult(Result, "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
@@ -1070,7 +1070,6 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     GraphicsPipelineCreateInfo.subpass             = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex   = -1;
-
     {
         VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
                                                     VK_NULL_HANDLE, // Pipeline Cache

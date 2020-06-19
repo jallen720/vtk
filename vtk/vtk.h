@@ -180,7 +180,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
 
 VTK_API
 swapchain
-CreateSwapchain(VkSurfaceKHR PlatformSurface, device *Device);
+CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface);
 
 VTK_API
 VkCommandPool
