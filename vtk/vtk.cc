@@ -347,16 +347,16 @@ CreateInstance(instance_config *Config)
         DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
         DebugUtilsMessengerCreateInfo.pUserData       = NULL;
 
-        Instance.Instance = CreateVkInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
+        Instance.Handle = CreateVkInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
-        LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Instance, vkCreateDebugUtilsMessengerEXT)
-        VkResult Result = vkCreateDebugUtilsMessengerEXT(Instance.Instance, &DebugUtilsMessengerCreateInfo, NULL,
+        LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
+        VkResult Result = vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
                                                          &Instance.DebugUtilsMessenger);
         ValidateVkResult(Result, "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
     }
     else
     {
-        Instance.Instance = CreateVkInstance(Config->AppName, Extensions, Layers, NULL);
+        Instance.Handle = CreateVkInstance(Config->AppName, Extensions, Layers, NULL);
     }
     return Instance;
 }
@@ -655,18 +655,18 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
         SwapchainCreateInfo.pQueueFamilyIndices   = NULL;
     }
 
-    VkResult Result = vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Swapchain);
+    VkResult Result = vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle);
     ValidateVkResult(Result, "vkCreateSwapchainKHR", "failed to create swapchain");
 
     ////////////////////////////////////////////////////////////
     /// Swapchain Image Creation
     ////////////////////////////////////////////////////////////
-    auto Images = LoadVkObjects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Swapchain);
+    auto Images = LoadVkObjects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Handle);
     for(u32 ImageIndex = 0; ImageIndex < Images.Count; ++ImageIndex)
     {
         swapchain_image *SwapchainImage = ctk::Push(&Swapchain.Images);
-        SwapchainImage->Image = Images[ImageIndex];
-        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Image, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
+        SwapchainImage->Handle = Images[ImageIndex];
+        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Handle, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
     // Store surface state used to create swapchain for future reference.
@@ -707,13 +707,13 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     BufferCreateInfo.queueFamilyIndexCount = 0;
     BufferCreateInfo.pQueueFamilyIndices   = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
     {
-        VkResult Result = vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Buffer);
+        VkResult Result = vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle);
         ValidateVkResult(Result, "vkCreateBuffer", "failed to create buffer");
     }
 
     // Memory Allocation
     VkMemoryRequirements MemoryRequirements = {};
-    vkGetBufferMemoryRequirements(Device->Logical, Buffer.Buffer, &MemoryRequirements);
+    vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
 
     VkMemoryAllocateInfo MemoryAllocateInfo = {};
     MemoryAllocateInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -735,7 +735,7 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
 
     // Bind device memory to buffer object.
     {
-        VkResult Result = vkBindBufferMemory(Device->Logical, Buffer.Buffer, Buffer.Memory, 0);
+        VkResult Result = vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0);
         ValidateVkResult(Result, "vkBindBufferMemory", "failed to bind buffer memory");
     }
 
@@ -810,7 +810,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
     RenderPassCreateInfo.pDependencies   = SubpassDependencies;
 
-    VkResult Result = vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.RenderPass);
+    VkResult Result = vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle);
     ValidateVkResult(Result, "vkCreateRenderPass", "failed to create render pass");
 
     return RenderPass;
@@ -860,7 +860,7 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
     ShaderModuleCreateInfo.pCode    = (const u32 *)ShaderByteCode.Data;
 
-    VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Module);
+    VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle);
     ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
 
     // Cleanup
@@ -904,7 +904,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
         ShaderStageCreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         ShaderStageCreateInfo->flags               = 0;
         ShaderStageCreateInfo->stage               = ShaderModule->StageBit;
-        ShaderStageCreateInfo->module              = ShaderModule->Module;
+        ShaderStageCreateInfo->module              = ShaderModule->Handle;
         ShaderStageCreateInfo->pName               = "main";
         ShaderStageCreateInfo->pSpecializationInfo = NULL;
     }
@@ -1076,7 +1076,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
                                                     1,
                                                     &GraphicsPipelineCreateInfo,
                                                     NULL, // Allocation Callbacks
-                                                    &GraphicsPipeline.Pipeline);
+                                                    &GraphicsPipeline.Handle);
         ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
     }
 

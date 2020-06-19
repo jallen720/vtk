@@ -28,7 +28,7 @@ struct instance_config
 
 struct instance
 {
-    VkInstance               Instance;
+    VkInstance               Handle;
     VkDebugUtilsMessengerEXT DebugUtilsMessenger;
 };
 
@@ -60,13 +60,13 @@ struct device
 
 struct swapchain_image
 {
-    VkImage     Image;
+    VkImage     Handle;
     VkImageView View;
 };
 
 struct swapchain
 {
-    VkSwapchainKHR                        Swapchain;
+    VkSwapchainKHR                        Handle;
     ctk::static_array<swapchain_image, 4> Images;
     VkFormat                              ImageFormat;
     VkExtent2D                            Extent;
@@ -74,7 +74,7 @@ struct swapchain
 
 struct buffer
 {
-    VkBuffer       Buffer;
+    VkBuffer       Handle;
     VkDeviceMemory Memory;
 };
 
@@ -100,7 +100,7 @@ struct render_pass_config
 
 struct render_pass
 {
-    VkRenderPass                       RenderPass;
+    VkRenderPass                       Handle;
     ctk::static_array<VkClearValue, 4> ClearValues;
 };
 
@@ -113,7 +113,7 @@ struct framebuffer_config
 
 struct shader_module
 {
-    VkShaderModule        Module;
+    VkShaderModule        Handle;
     VkShaderStageFlagBits StageBit;
 };
 
@@ -149,7 +149,7 @@ struct graphics_pipeline_config
 
 struct graphics_pipeline
 {
-    VkPipeline       Pipeline;
+    VkPipeline       Handle;
     VkPipelineLayout Layout;
 };
 

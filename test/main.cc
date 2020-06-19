@@ -90,7 +90,7 @@ main()
 
     // Platform Surface
     VkSurfaceKHR PlatformSurface = {};
-    VkResult Result = glfwCreateWindowSurface(Instance.Instance, Window, NULL, &PlatformSurface);
+    VkResult Result = glfwCreateWindowSurface(Instance.Handle, Window, NULL, &PlatformSurface);
     vtk::ValidateVkResult(Result, "glfwCreateWindowSurface", "failed to create GLFW surface");
 
     // Device
@@ -99,7 +99,7 @@ main()
     DeviceConfig.Features.geometryShader = VK_TRUE;
     DeviceConfig.Features.samplerAnisotropy = VK_TRUE;
     // DeviceConfig.Features.vertexPipelineStoresAndAtomics = VK_TRUE;
-    vtk::device Device = vtk::CreateDevice(Instance.Instance, PlatformSurface, &DeviceConfig);
+    vtk::device Device = vtk::CreateDevice(Instance.Handle, PlatformSurface, &DeviceConfig);
 
     // Swapchain
     vtk::swapchain Swapchain = vtk::CreateSwapchain(&Device, PlatformSurface);
@@ -156,7 +156,7 @@ main()
         ctk::Push(&FramebufferConfig.Attachments, Swapchain.Images[FramebufferIndex].View);
         FramebufferConfig.Extent = Swapchain.Extent;
         FramebufferConfig.Layers = 1;
-        ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.RenderPass, &FramebufferConfig));
+        ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.Handle, &FramebufferConfig));
     }
 
     // Command Buffers
@@ -191,7 +191,7 @@ main()
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsPipelineConfig.DepthTesting      = VK_TRUE;
 
-    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.RenderPass, &GraphicsPipelineConfig);
+    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
 
     ////////////////////////////////////////////////////////////
     /// Record render pass.
@@ -206,7 +206,7 @@ main()
     CommandBufferBeginInfo.flags            = 0;
     CommandBufferBeginInfo.pInheritanceInfo = NULL;
 
-    VkBuffer VertexBuffers[] = { VertexBuffer.Buffer };
+    VkBuffer VertexBuffers[] = { VertexBuffer.Handle };
     VkDeviceSize VertexBufferOffsets[] = { 0 };
     for(u32 FrameIndex = 0; FrameIndex < Swapchain.Images.Count; ++FrameIndex)
     {
@@ -217,7 +217,7 @@ main()
         }
         VkRenderPassBeginInfo RenderPassBeginInfo = {};
         RenderPassBeginInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RenderPassBeginInfo.renderPass      = RenderPass.RenderPass;
+        RenderPassBeginInfo.renderPass      = RenderPass.Handle;
         RenderPassBeginInfo.framebuffer     = Framebuffers[FrameIndex];
         RenderPassBeginInfo.renderArea      = RenderArea;
         RenderPassBeginInfo.clearValueCount = RenderPass.ClearValues.Count;
@@ -227,7 +227,7 @@ main()
         vkCmdBeginRenderPass(CommandBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         // Render Commands
-        vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline.Pipeline);
+        vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline.Handle);
         vkCmdBindVertexBuffers(CommandBuffer,
                                0, // First Binding
                                1, // Binding Count
@@ -278,7 +278,7 @@ main()
         // Aquire next swapchain image index, using a semaphore to signal when image is available for rendering.
         u32 SwapchainImageIndex = VTK_UNSET_INDEX;
         {
-            VkResult Result = vkAcquireNextImageKHR(Device.Logical, Swapchain.Swapchain, UINT64_MAX, CurrentFrame->ImageAquiredSemaphore,
+            VkResult Result = vkAcquireNextImageKHR(Device.Logical, Swapchain.Handle, UINT64_MAX, CurrentFrame->ImageAquiredSemaphore,
                                                     VK_NULL_HANDLE, &SwapchainImageIndex);
             vtk::ValidateVkResult(Result, "vkAcquireNextImageKHR", "failed to aquire next swapchain image");
         }
@@ -321,7 +321,7 @@ main()
         ////////////////////////////////////////////////////////////
 
         // These are parallel; provide 1:1 index per swapchain.
-        VkSwapchainKHR Swapchains[] = { Swapchain.Swapchain };
+        VkSwapchainKHR Swapchains[] = { Swapchain.Handle };
         u32 SwapchainImageIndexes[] = { SwapchainImageIndex };
 
         VkPresentInfoKHR PresentInfo = {};
