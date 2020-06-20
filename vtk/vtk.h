@@ -137,14 +137,21 @@ struct vertex_input
     u32 AttributeIndex;
 };
 
+struct descriptor_pool_config
+{
+    ctk::sarray<VkDescriptorPoolSize, 12> Sizes;
+    u32                                   MaxSets;
+};
+
 struct graphics_pipeline_config
 {
-    ctk::sarray<shader_module *, 4> ShaderModules;
-    ctk::sarray<vertex_input, 4>    VertexInputs;
-    vertex_layout                   *VertexLayout;
-    VkExtent2D                      ViewportExtent;
-    VkPrimitiveTopology             PrimitiveTopology;
-    VkBool32                        DepthTesting;
+    ctk::sarray<shader_module *, 4>       ShaderModules;
+    ctk::sarray<vertex_input, 4>          VertexInputs;
+    vertex_layout                         *VertexLayout;
+    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
+    VkExtent2D                            ViewportExtent;
+    VkPrimitiveTopology                   PrimitiveTopology;
+    VkBool32                              DepthTesting;
 };
 
 struct graphics_pipeline
@@ -209,6 +216,19 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
 VTK_API
 u32
 PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount);
+
+VTK_API
+VkDescriptorPool
+CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config);
+
+VTK_API
+VkDescriptorSetLayout
+CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLayoutBinding, 4> *DescriptorSetLayoutBindings);
+
+VTK_API
+void
+AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, ctk::sarray<VkDescriptorSetLayout, 4> *DescriptorSetLayouts,
+                       ctk::sarray<VkDescriptorSet, 4> *DescriptorSets);
 
 VTK_API
 graphics_pipeline

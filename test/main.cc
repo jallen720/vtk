@@ -3,6 +3,11 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "vtk/vtk.h"
 #include "ctk/ctk.h"
 #include "ctk/data.h"
@@ -48,7 +53,9 @@ MouseButtonCallback(GLFWwindow *Window, s32 button, s32 Action, s32 Mods)
 s32
 main()
 {
+    static ctk::vec2<f64> UNSET_MOUSE_POSITION = { -10000.0, -10000.0 };
     app_state AppState = {};
+    AppState.MousePosition = UNSET_MOUSE_POSITION;
     ctk::data Config = ctk::LoadData("assets/test_config.ctkd");
 
     ////////////////////////////////////////////////////////////
@@ -110,6 +117,14 @@ main()
     ////////////////////////////////////////////////////////////
     /// Data
     ////////////////////////////////////////////////////////////
+
+    // Buffers
+    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    // Vertex Data
     struct vertex
     {
         ctk::vec3<f32> Position;
@@ -121,8 +136,6 @@ main()
         { {  0.0f,  -0.75f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
         { { -0.75f,  0.75f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
     };
-    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     vtk::WriteToHostCoherentBuffer(Device.Logical, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
 
     ////////////////////////////////////////////////////////////
@@ -179,6 +192,44 @@ main()
     u32 VertexColorIndex = vtk::PushVertexAttribute(&VertexLayout, 4);
 
     ////////////////////////////////////////////////////////////
+    /// Descriptor Sets
+    ////////////////////////////////////////////////////////////
+
+    // Pool
+    vtk::descriptor_pool_config DescriptorPoolConfig = {};
+    ctk::Push(&DescriptorPoolConfig.Sizes, { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+    DescriptorPoolConfig.MaxSets = 3;
+    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, &DescriptorPoolConfig);
+
+    // Layouts
+    ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
+    ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT });
+
+    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
+    ctk::Push(&DescriptorSetLayouts, vtk::CreateDescriptorSetLayout(Device.Logical, &DescriptorSetLayoutBindings));
+
+    // Allocation
+    ctk::sarray<VkDescriptorSet, 4> DescriptorSets = {};
+    vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, &DescriptorSetLayouts, &DescriptorSets);
+
+    // Updates
+    VkDescriptorBufferInfo DescriptorBufferInfo = {};
+    DescriptorBufferInfo.buffer = MVPMatrixBuffer.Handle;
+    DescriptorBufferInfo.offset = 0;
+    DescriptorBufferInfo.range  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet WriteDescriptorSets[1] = {};
+    WriteDescriptorSets[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    WriteDescriptorSets[0].dstSet          = DescriptorSets[0];
+    WriteDescriptorSets[0].dstBinding      = 0;
+    WriteDescriptorSets[0].dstArrayElement = 0;
+    WriteDescriptorSets[0].descriptorCount = 1;
+    WriteDescriptorSets[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    WriteDescriptorSets[0].pBufferInfo     = &DescriptorBufferInfo;
+
+    vkUpdateDescriptorSets(Device.Logical, CTK_ARRAY_COUNT(WriteDescriptorSets), WriteDescriptorSets, 0, NULL);
+
+    ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
     ////////////////////////////////////////////////////////////
     vtk::graphics_pipeline_config GraphicsPipelineConfig = {};
@@ -187,6 +238,7 @@ main()
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
     GraphicsPipelineConfig.VertexLayout      = &VertexLayout;
+    GraphicsPipelineConfig.DescriptorSetLayouts = DescriptorSetLayouts;
     GraphicsPipelineConfig.ViewportExtent    = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsPipelineConfig.DepthTesting      = VK_TRUE;
@@ -228,6 +280,14 @@ main()
 
         // Render Commands
         vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline.Handle);
+        vkCmdBindDescriptorSets(CommandBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                GraphicsPipeline.Layout,
+                                0, // First Set Number
+                                DescriptorSets.Count,
+                                DescriptorSets.Data, // Sets to be bound to [first .. first + count]
+                                0, // Dynamic Offset Count
+                                NULL); // Dynamic Offsets
         vkCmdBindVertexBuffers(CommandBuffer,
                                0, // First Binding
                                1, // Binding Count
@@ -256,6 +316,8 @@ main()
     /// Main Loop
     ////////////////////////////////////////////////////////////
     b32 Close = false;
+    glm::vec3 CameraPosition = { 0.0f, 0.0f, -1.0f };
+    glm::vec3 CameraRotation = { 0.0f, 0.0f, 0.0f };
     while(!glfwWindowShouldClose(Window) && !Close)
     {
         ////////////////////////////////////////////////////////////
@@ -266,6 +328,94 @@ main()
         {
             Close = true;
         }
+
+        // Mouse Delta
+        ctk::vec2 PreviousMousePosition = AppState.MousePosition;
+        f64 CurrentMouseX = 0.0;
+        f64 CurrentMouseY = 0.0;
+        glfwGetCursorPos(Window, &CurrentMouseX, &CurrentMouseY);
+        AppState.MousePosition = { CurrentMouseX, CurrentMouseY };
+
+        // Calculate delta if previous position was not unset.
+        if(PreviousMousePosition != UNSET_MOUSE_POSITION)
+        {
+            AppState.MouseDelta = AppState.MousePosition - PreviousMousePosition;
+        }
+
+        ////////////////////////////////////////////////////////////
+        /// Camera Controls
+        ////////////////////////////////////////////////////////////
+
+        // Rotation
+        if(AppState.MouseButtonDown[GLFW_MOUSE_BUTTON_2])
+        {
+            static const f32 SENS = 0.4f;
+            CameraRotation.x += AppState.MouseDelta.Y * SENS;
+            CameraRotation.y -= AppState.MouseDelta.X * SENS;
+            CameraRotation.x = ctk::Clamp(CameraRotation.x, -80.0f, 80.0f);
+        }
+
+        // Translation
+        glm::vec3 Translation = {};
+        f32 Modifier = AppState.KeyDown[GLFW_KEY_LEFT_SHIFT] ? 4 :
+                       AppState.KeyDown[GLFW_KEY_LEFT_CONTROL] ? 1 :
+                       2;
+        if(AppState.KeyDown[GLFW_KEY_W]) Translation.z += 0.01f * Modifier;
+        if(AppState.KeyDown[GLFW_KEY_S]) Translation.z -= 0.01f * Modifier;
+        if(AppState.KeyDown[GLFW_KEY_D]) Translation.x += 0.01f * Modifier;
+        if(AppState.KeyDown[GLFW_KEY_A]) Translation.x -= 0.01f * Modifier;
+        if(AppState.KeyDown[GLFW_KEY_E]) Translation.y -= 0.01f * Modifier;
+        if(AppState.KeyDown[GLFW_KEY_Q]) Translation.y += 0.01f * Modifier;
+
+        glm::mat4 CameraWorldMatrix(1.0f);
+        CameraWorldMatrix = glm::rotate(CameraWorldMatrix, glm::radians(CameraRotation.x), { 1.0f, 0.0f, 0.0f });
+        CameraWorldMatrix = glm::rotate(CameraWorldMatrix, glm::radians(CameraRotation.y), { 0.0f, 1.0f, 0.0f });
+        CameraWorldMatrix = glm::rotate(CameraWorldMatrix, glm::radians(CameraRotation.z), { 0.0f, 0.0f, 1.0f });
+        CameraWorldMatrix = glm::translate(CameraWorldMatrix, { CameraPosition.x, CameraPosition.y, CameraPosition.z });
+
+        glm::vec3 Right = {};
+        Right.x = CameraWorldMatrix[0][0];
+        Right.y = CameraWorldMatrix[1][0];
+        Right.z = CameraWorldMatrix[2][0];
+
+        glm::vec3 Up = {};
+        Up.x = CameraWorldMatrix[0][1];
+        Up.y = CameraWorldMatrix[1][1];
+        Up.z = CameraWorldMatrix[2][1];
+
+        glm::vec3 Forward = {};
+        Forward.x = CameraWorldMatrix[0][2];
+        Forward.y = CameraWorldMatrix[1][2];
+        Forward.z = CameraWorldMatrix[2][2];
+
+        glm::vec3 NewPosition = CameraPosition;
+        NewPosition = NewPosition + (Right * Translation.x);
+        NewPosition = NewPosition + (Up * Translation.y);
+        CameraPosition = NewPosition + (Forward * Translation.z);
+
+        ////////////////////////////////////////////////////////////
+        /// Update Uniform Data
+        ////////////////////////////////////////////////////////////
+        glm::mat4 CameraMatrix(1.0f);
+        CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.x), { 1.0f, 0.0f, 0.0f });
+        CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.y), { 0.0f, 1.0f, 0.0f });
+        CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.z), { 0.0f, 0.0f, 1.0f });
+        CameraMatrix = glm::translate(CameraMatrix, CameraPosition);
+        glm::vec3 CameraForward = { CameraMatrix[0][2], CameraMatrix[1][2], CameraMatrix[2][2] };
+        glm::mat4 ViewMatrix = glm::lookAt(CameraPosition, CameraPosition + CameraForward, { 0.0f, -1.0f, 0.0f });
+
+        glm::mat4 ProjectionMatrix = glm::perspective(glm::radians(90.0f), Swapchain.Extent.width / (f32)Swapchain.Extent.height, 0.1f, 1000.0f);
+        ProjectionMatrix[1][1] *= -1; // Flip y value for scale (glm is designed for OpenGL).
+
+        glm::mat4 ModelMatrix(1.0f);
+        ModelMatrix = glm::translate(ModelMatrix, { 0.0f, 0.0f, 1.0f });
+        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 1.0f, 0.0f, 0.0f });
+        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 1.0f, 0.0f });
+        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 0.0f, 1.0f });
+        ModelMatrix = scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
+
+        alignas(16) glm::mat4 MVPMatrix = ProjectionMatrix * ViewMatrix * ModelMatrix;
+        vtk::WriteToHostCoherentBuffer(Device.Logical, &MVPMatrixBuffer, &MVPMatrix, sizeof(glm::mat4), 0);
 
         ////////////////////////////////////////////////////////////
         /// Rendering

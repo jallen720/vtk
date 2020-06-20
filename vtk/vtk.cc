@@ -887,6 +887,51 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     return AttributeIndex;
 }
 
+VkDescriptorPool
+CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
+{
+    VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
+    DescriptorPoolCreateInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    DescriptorPoolCreateInfo.flags         = 0;
+    DescriptorPoolCreateInfo.maxSets       = Config->MaxSets;
+    DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
+    DescriptorPoolCreateInfo.pPoolSizes    = Config->Sizes.Data;
+
+    VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
+    VkResult Result = vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool);
+    ValidateVkResult(Result, "vkCreateDescriptorPool", "failed to create descriptor pool");
+    return DescriptorPool;
+}
+
+VkDescriptorSetLayout
+CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLayoutBinding, 4> *DescriptorSetLayoutBindings)
+{
+    VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo = {};
+    DescriptorSetLayoutCreateInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings->Count;
+    DescriptorSetLayoutCreateInfo.pBindings    = DescriptorSetLayoutBindings->Data;
+
+    VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
+    VkResult Result = vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSetLayout);
+    ValidateVkResult(Result, "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
+    return DescriptorSetLayout;
+}
+
+void
+AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, ctk::sarray<VkDescriptorSetLayout, 4> *DescriptorSetLayouts,
+                       ctk::sarray<VkDescriptorSet, 4> *DescriptorSets)
+{
+        VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
+        DescriptorSetAllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        DescriptorSetAllocateInfo.descriptorPool     = DescriptorPool;
+        DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
+        DescriptorSetAllocateInfo.pSetLayouts        = DescriptorSetLayouts->Data;
+
+        VkResult result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
+        ValidateVkResult(result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+        DescriptorSets->Count = DescriptorSetLayouts->Count;
+}
+
 graphics_pipeline
 CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_config *Config)
 {
@@ -913,7 +958,6 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     /// Vertex Input State
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
-    ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
     for(u32 InputIndex = 0; InputIndex < Config->VertexInputs.Count; ++InputIndex)
     {
         vertex_input *VertexInput = At(&Config->VertexInputs, InputIndex);
@@ -926,6 +970,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
         AttributeDescription->offset   = VertexAttribute->Offset;
     }
 
+    ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
     VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexBindingDescriptions);
     BindingDescription->binding   = 0;
     BindingDescription->stride    = Config->VertexLayout->Size;
@@ -1040,8 +1085,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
     LayoutCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    LayoutCreateInfo.setLayoutCount         = 0;
-    LayoutCreateInfo.pSetLayouts            = NULL;
+    LayoutCreateInfo.setLayoutCount         = Config->DescriptorSetLayouts.Count;
+    LayoutCreateInfo.pSetLayouts            = Config->DescriptorSetLayouts.Data;
     LayoutCreateInfo.pushConstantRangeCount = 0;
     LayoutCreateInfo.pPushConstantRanges    = NULL;
     {
