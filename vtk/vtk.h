@@ -22,112 +22,110 @@ struct instance_config
 {
     ctk::sarray<cstr, 8> Layers;
     ctk::sarray<cstr, 8> Extensions;
-    b32                  Debug;
-    cstr                 AppName;
+    b32 Debug;
+    cstr AppName;
 };
 
 struct instance
 {
-    VkInstance               Handle;
+    VkInstance Handle;
     VkDebugUtilsMessengerEXT DebugUtilsMessenger;
 };
 
 struct device_config
 {
-    ctk::sarray<cstr, 8>     Extensions;
+    ctk::sarray<cstr, 8> Extensions;
     VkPhysicalDeviceFeatures Features;
 };
 
 struct queue_family_indexes
 {
     u32 Graphics = VTK_UNSET_INDEX;
-    u32 Present  = VTK_UNSET_INDEX;
+    u32 Present = VTK_UNSET_INDEX;
 };
 
 struct device
 {
-    VkPhysicalDevice                 Physical;
+    VkPhysicalDevice Physical;
     VkPhysicalDeviceMemoryProperties MemoryProperties;
-    queue_family_indexes             QueueFamilyIndexes;
-    VkSurfaceCapabilitiesKHR         SurfaceCapabilities;
-    ctk::array<VkSurfaceFormatKHR>   SurfaceFormats;
-    ctk::array<VkPresentModeKHR>     SurfacePresentModes;
+    queue_family_indexes QueueFamilyIndexes;
+    VkSurfaceCapabilitiesKHR SurfaceCapabilities;
+    ctk::array<VkSurfaceFormatKHR> SurfaceFormats;
+    ctk::array<VkPresentModeKHR> SurfacePresentModes;
 
-    VkDevice                         Logical;
-    VkQueue                          GraphicsQueue;
-    VkQueue                          PresentQueue;
+    VkDevice Logical;
+    VkQueue GraphicsQueue;
+    VkQueue PresentQueue;
 };
 
 struct swapchain_image
 {
-    VkImage     Handle;
+    VkImage Handle;
     VkImageView View;
 };
 
 struct swapchain
 {
-    VkSwapchainKHR                  Handle;
+    VkSwapchainKHR Handle;
     ctk::sarray<swapchain_image, 4> Images;
-    VkFormat                        ImageFormat;
-    VkExtent2D                      Extent;
+    VkFormat ImageFormat;
+    VkExtent2D Extent;
 };
 
 struct buffer
 {
-    VkBuffer       Handle;
+    VkBuffer Handle;
     VkDeviceMemory Memory;
 };
 
 struct attachment
 {
-    VkFormat            Format;
-    VkAttachmentLoadOp  LoadOp;
-    VkAttachmentStoreOp StoreOp;
-    VkClearValue        ClearValue;
+    VkAttachmentDescription Description;
+    VkClearValue ClearValue;
 };
 
 struct subpass
 {
     ctk::sarray<VkAttachmentReference, 4> ColorAttachmentReferences;
-    ctk::optional<VkAttachmentReference>  DepthAttachmentReference;
+    ctk::optional<VkAttachmentReference> DepthAttachmentReference;
 };
 
 struct render_pass_config
 {
     ctk::sarray<attachment, 4> Attachments;
-    ctk::sarray<subpass, 4>    Subpasses;
+    ctk::sarray<subpass, 4> Subpasses;
 };
 
 struct render_pass
 {
-    VkRenderPass                 Handle;
+    VkRenderPass Handle;
     ctk::sarray<VkClearValue, 4> ClearValues;
 };
 
 struct framebuffer_config
 {
     ctk::sarray<VkImageView, 4> Attachments;
-    VkExtent2D                  Extent;
-    u32                         Layers;
+    VkExtent2D Extent;
+    u32 Layers;
 };
 
 struct shader_module
 {
-    VkShaderModule        Handle;
+    VkShaderModule Handle;
     VkShaderStageFlagBits StageBit;
 };
 
 struct vertex_attribute
 {
     VkFormat Format;
-    u32      Size;
-    u32      Offset;
+    u32 Size;
+    u32 Offset;
 };
 
 struct vertex_layout
 {
     ctk::sarray<vertex_attribute, 4> Attributes;
-    u32                              Size;
+    u32 Size;
 };
 
 struct vertex_input
@@ -140,23 +138,23 @@ struct vertex_input
 struct descriptor_pool_config
 {
     ctk::sarray<VkDescriptorPoolSize, 12> Sizes;
-    u32                                   MaxSets;
+    u32 MaxSets;
 };
 
 struct graphics_pipeline_config
 {
-    ctk::sarray<shader_module *, 4>       ShaderModules;
-    ctk::sarray<vertex_input, 4>          VertexInputs;
-    vertex_layout                         *VertexLayout;
+    ctk::sarray<shader_module *, 4> ShaderModules;
+    ctk::sarray<vertex_input, 4> VertexInputs;
+    vertex_layout *VertexLayout;
     ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
-    VkExtent2D                            ViewportExtent;
-    VkPrimitiveTopology                   PrimitiveTopology;
-    VkBool32                              DepthTesting;
+    VkExtent2D ViewportExtent;
+    VkPrimitiveTopology PrimitiveTopology;
+    VkBool32 DepthTesting;
 };
 
 struct graphics_pipeline
 {
-    VkPipeline       Handle;
+    VkPipeline Handle;
     VkPipelineLayout Layout;
 };
 
@@ -164,14 +162,14 @@ struct frame
 {
     VkSemaphore ImageAquiredSemaphore;
     VkSemaphore RenderFinishedSemaphore;
-    VkFence     InFlightFence;
+    VkFence InFlightFence;
 };
 
 struct frame_state
 {
-    ctk::sarray<frame, 4>   Frames;
+    ctk::sarray<frame, 4> Frames;
     ctk::sarray<VkFence, 4> PreviousFrameInFlightFences;
-    u32                     CurrentFrameIndex;
+    u32 CurrentFrameIndex;
 };
 
 ////////////////////////////////////////////////////////////
@@ -196,6 +194,10 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex);
 VTK_API
 buffer
 CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags);
+
+VTK_API
+void
+DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer);
 
 VTK_API
 render_pass
@@ -241,6 +243,10 @@ CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount
 VTK_API
 void
 WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
+
+VTK_API
+void
+WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
 
 VTK_API
 void

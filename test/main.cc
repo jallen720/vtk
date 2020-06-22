@@ -18,10 +18,16 @@
 ////////////////////////////////////////////////////////////
 struct app_state
 {
-    b32            KeyDown[GLFW_KEY_LAST + 1];
-    b32            MouseButtonDown[GLFW_MOUSE_BUTTON_LAST + 1];
+    b32 KeyDown[GLFW_KEY_LAST + 1];
+    b32 MouseButtonDown[GLFW_MOUSE_BUTTON_LAST + 1];
     ctk::vec2<f64> MousePosition;
     ctk::vec2<f64> MouseDelta;
+};
+
+struct vertex
+{
+    ctk::vec3<f32> Position;
+    ctk::vec4<f32> Color;
 };
 
 ////////////////////////////////////////////////////////////
@@ -119,24 +125,20 @@ main()
     ////////////////////////////////////////////////////////////
 
     // Buffers
-    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(vertex) * 3,
+                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4) * 2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
     // Vertex Data
-    struct vertex
-    {
-        ctk::vec3<f32> Position;
-        ctk::vec4<f32> Color;
-    };
     vertex Vertexes[] =
     {
         { {  0.75f,  0.75f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
         { {  0.0f,  -0.75f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
         { { -0.75f,  0.75f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
     };
-    vtk::WriteToHostCoherentBuffer(Device.Logical, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
+    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
 
     ////////////////////////////////////////////////////////////
     /// Render Pass
@@ -146,10 +148,15 @@ main()
     // Attachments
     u32 ColorAttachmentIndex = RenderPassConfig.Attachments.Count;
     vtk::attachment *ColorAttachment = ctk::Push(&RenderPassConfig.Attachments);
-    ColorAttachment->Format     = Swapchain.ImageFormat;
-    ColorAttachment->LoadOp     = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    ColorAttachment->StoreOp    = VK_ATTACHMENT_STORE_OP_STORE;
-    ColorAttachment->ClearValue = { 0.04f, 0.04f, 0.04f, 1.0f };
+    ColorAttachment->Description.format         = Swapchain.ImageFormat;
+    ColorAttachment->Description.samples        = VK_SAMPLE_COUNT_1_BIT;
+    ColorAttachment->Description.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
+    ColorAttachment->Description.storeOp        = VK_ATTACHMENT_STORE_OP_STORE; // Store rendered contents in memory.
+    ColorAttachment->Description.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
+    ColorAttachment->Description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
+    ColorAttachment->Description.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
+    ColorAttachment->Description.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    ColorAttachment->ClearValue                 = { 0.04f, 0.04f, 0.04f, 1.0f };
 
     // Subpasses
     vtk::subpass *Subpass = ctk::Push(&RenderPassConfig.Subpasses);
@@ -197,13 +204,13 @@ main()
 
     // Pool
     vtk::descriptor_pool_config DescriptorPoolConfig = {};
-    ctk::Push(&DescriptorPoolConfig.Sizes, { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 });
+    ctk::Push(&DescriptorPoolConfig.Sizes, { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1 });
     DescriptorPoolConfig.MaxSets = 3;
     VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, &DescriptorPoolConfig);
 
     // Layouts
     ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
-    ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT });
+    ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT });
 
     ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
     ctk::Push(&DescriptorSetLayouts, vtk::CreateDescriptorSetLayout(Device.Logical, &DescriptorSetLayoutBindings));
@@ -224,7 +231,7 @@ main()
     WriteDescriptorSets[0].dstBinding      = 0;
     WriteDescriptorSets[0].dstArrayElement = 0;
     WriteDescriptorSets[0].descriptorCount = 1;
-    WriteDescriptorSets[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    WriteDescriptorSets[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     WriteDescriptorSets[0].pBufferInfo     = &DescriptorBufferInfo;
 
     vkUpdateDescriptorSets(Device.Logical, CTK_ARRAY_COUNT(WriteDescriptorSets), WriteDescriptorSets, 0, NULL);
@@ -237,11 +244,11 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
-    GraphicsPipelineConfig.VertexLayout      = &VertexLayout;
+    GraphicsPipelineConfig.VertexLayout         = &VertexLayout;
     GraphicsPipelineConfig.DescriptorSetLayouts = DescriptorSetLayouts;
-    GraphicsPipelineConfig.ViewportExtent    = Swapchain.Extent;
-    GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipelineConfig.DepthTesting      = VK_TRUE;
+    GraphicsPipelineConfig.ViewportExtent       = Swapchain.Extent;
+    GraphicsPipelineConfig.PrimitiveTopology    = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipelineConfig.DepthTesting         = VK_TRUE;
 
     vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
 
@@ -280,24 +287,28 @@ main()
 
         // Render Commands
         vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline.Handle);
-        vkCmdBindDescriptorSets(CommandBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                GraphicsPipeline.Layout,
-                                0, // First Set Number
-                                DescriptorSets.Count,
-                                DescriptorSets.Data, // Sets to be bound to [first .. first + count]
-                                0, // Dynamic Offset Count
-                                NULL); // Dynamic Offsets
         vkCmdBindVertexBuffers(CommandBuffer,
                                0, // First Binding
                                1, // Binding Count
                                VertexBuffers,
                                VertexBufferOffsets);
-        vkCmdDraw(CommandBuffer,
-                  CTK_ARRAY_COUNT(Vertexes),
-                  1, // Instance Count (instanced rendering only)
-                  0, // First Vertex
-                  0); // First instance index (instanced rendering only)
+        for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
+        {
+            u32 DynamicOffsets[1] = { EntityIndex * sizeof(glm::mat4) };
+            vkCmdBindDescriptorSets(CommandBuffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    GraphicsPipeline.Layout,
+                                    0, // First Set Number
+                                    DescriptorSets.Count,
+                                    DescriptorSets.Data, // Sets to be bound to [first .. first + count]
+                                    CTK_ARRAY_COUNT(DynamicOffsets), // Dynamic Offset Count
+                                    DynamicOffsets); // Dynamic Offsets
+            vkCmdDraw(CommandBuffer,
+                      CTK_ARRAY_COUNT(Vertexes),
+                      1, // Instance Count (instanced rendering only)
+                      0, // First Vertex
+                      0); // First instance index (instanced rendering only)
+        }
 
         // End
         vkCmdEndRenderPass(CommandBuffer);
@@ -318,6 +329,11 @@ main()
     b32 Close = false;
     glm::vec3 CameraPosition = { 0.0f, 0.0f, -1.0f };
     glm::vec3 CameraRotation = { 0.0f, 0.0f, 0.0f };
+    glm::vec3 EntityPositions[2] =
+    {
+        { 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, 3.0f },
+    };
     while(!glfwWindowShouldClose(Window) && !Close)
     {
         ////////////////////////////////////////////////////////////
@@ -396,6 +412,8 @@ main()
         ////////////////////////////////////////////////////////////
         /// Update Uniform Data
         ////////////////////////////////////////////////////////////
+        alignas(16) glm::mat4 MVPMatrixes[2] = {};
+
         glm::mat4 CameraMatrix(1.0f);
         CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.x), { 1.0f, 0.0f, 0.0f });
         CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.y), { 0.0f, 1.0f, 0.0f });
@@ -407,15 +425,18 @@ main()
         glm::mat4 ProjectionMatrix = glm::perspective(glm::radians(90.0f), Swapchain.Extent.width / (f32)Swapchain.Extent.height, 0.1f, 1000.0f);
         ProjectionMatrix[1][1] *= -1; // Flip y value for scale (glm is designed for OpenGL).
 
-        glm::mat4 ModelMatrix(1.0f);
-        ModelMatrix = glm::translate(ModelMatrix, { 0.0f, 0.0f, 1.0f });
-        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 1.0f, 0.0f, 0.0f });
-        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 1.0f, 0.0f });
-        ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 0.0f, 1.0f });
-        ModelMatrix = scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
+        for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
+        {
+            glm::mat4 ModelMatrix(1.0f);
+            ModelMatrix = glm::translate(ModelMatrix, EntityPositions[EntityIndex]);
+            ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 1.0f, 0.0f, 0.0f });
+            ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 1.0f, 0.0f });
+            ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 0.0f, 1.0f });
+            ModelMatrix = scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
 
-        alignas(16) glm::mat4 MVPMatrix = ProjectionMatrix * ViewMatrix * ModelMatrix;
-        vtk::WriteToHostCoherentBuffer(Device.Logical, &MVPMatrixBuffer, &MVPMatrix, sizeof(glm::mat4), 0);
+            MVPMatrixes[EntityIndex] = ProjectionMatrix * ViewMatrix * ModelMatrix;
+        }
+        vtk::WriteToHostCoherentBuffer(Device.Logical, &MVPMatrixBuffer, MVPMatrixes, sizeof(glm::mat4) * 2, 0);
 
         ////////////////////////////////////////////////////////////
         /// Rendering

@@ -266,7 +266,7 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
 }
 
 static u32
-FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties * MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
+FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties *MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
 {
     for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < MemoryProperties->memoryTypeCount; ++MemoryTypeIndex)
     {
@@ -302,6 +302,39 @@ CreateFence(VkDevice LogicalDevice)
     VkResult Result = vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence);
     ValidateVkResult(Result, "vkCreateFence", "failed to create fence");
     return Fence;
+}
+
+static VkCommandBuffer
+BeginOneTimeCommandBuffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
+{
+    VkCommandBuffer CommandBuffer = {};
+    AllocateCommandBuffers(LogicalDevice, CommandPool, 1, &CommandBuffer);
+
+    VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
+    CommandBufferBeginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    CommandBufferBeginInfo.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CommandBufferBeginInfo.pInheritanceInfo = NULL;
+
+    vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo);
+    return CommandBuffer;
+}
+
+static void
+SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer)
+{
+    vkEndCommandBuffer(CommandBuffer);
+
+    VkSubmitInfo SubmitInfo = {};
+    SubmitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    SubmitInfo.commandBufferCount = 1;
+    SubmitInfo.pCommandBuffers    = &CommandBuffer;
+
+    VkResult Result = vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE);
+    ValidateVkResult(Result, "vkQueueSubmit", "failed to submit one-time command buffer to queue");
+    vkQueueWaitIdle(Queue);
+
+    // Cleanup
+    vkFreeCommandBuffers(LogicalDevice, CommandPool, 1, &CommandBuffer);
 }
 
 ////////////////////////////////////////////////////////////
@@ -742,6 +775,13 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     return Buffer;
 }
 
+void
+DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
+{
+    vkDestroyBuffer(LogicalDevice, Buffer->Handle, NULL);
+    vkFreeMemory(LogicalDevice, Buffer->Memory, NULL);
+}
+
 render_pass
 CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
 {
@@ -754,18 +794,10 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     for(u32 AttachmentIndex = 0; AttachmentIndex < Config->Attachments.Count; ++AttachmentIndex)
     {
         attachment *Attachment = Config->Attachments + AttachmentIndex;
-        VkAttachmentDescription *AttachmentDescription = ctk::Push(&AttachmentDescriptions);
-        AttachmentDescription->format         = Attachment->Format;
-        AttachmentDescription->samples        = VK_SAMPLE_COUNT_1_BIT;
-        AttachmentDescription->loadOp         = Attachment->LoadOp; // Clear color attachment before drawing.
-        AttachmentDescription->storeOp        = Attachment->StoreOp; // Store rendered contents in memory.
-        AttachmentDescription->stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
-        AttachmentDescription->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
-        AttachmentDescription->initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
-        AttachmentDescription->finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        ctk::Push(&AttachmentDescriptions, Attachment->Description);
 
         // Store clear value if attachment uses a clear load operation.
-        if(Attachment->LoadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
+        if(Attachment->Description.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
         {
             ctk::Push(&RenderPass.ClearValues, Attachment->ClearValue);
         }
@@ -927,8 +959,8 @@ AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, 
         DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
         DescriptorSetAllocateInfo.pSetLayouts        = DescriptorSetLayouts->Data;
 
-        VkResult result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
-        ValidateVkResult(result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+        VkResult Result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
+        ValidateVkResult(Result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
         DescriptorSets->Count = DescriptorSetLayouts->Count;
 }
 
@@ -1154,6 +1186,28 @@ WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, Vk
     ValidateVkResult(Result, "vkMapMemory", "failed to map host coherent buffer to host memory");
     memcpy(MappedMemory, Data, Size);
     vkUnmapMemory(LogicalDevice, Buffer->Memory);
+}
+
+void
+WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset)
+{
+    // Create host-visible source buffer flagged as transfer source and write data to it.
+    buffer SourceBuffer = CreateBuffer(Device, Size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    WriteToHostCoherentBuffer(Device->Logical, &SourceBuffer, Data, Size, Offset);
+
+    // Copy source buffer data to destination buffer using queue.
+    VkBufferCopy BufferCopy = {};
+    BufferCopy.srcOffset = 0;
+    BufferCopy.dstOffset = 0;
+    BufferCopy.size = Size;
+
+    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+        vkCmdCopyBuffer(CommandBuffer, SourceBuffer.Handle, Buffer->Handle, 1, &BufferCopy);
+    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+
+    // Cleanup
+    DestroyBuffer(Device->Logical, &SourceBuffer);
 }
 
 void
