@@ -148,15 +148,15 @@ main()
     // Attachments
     u32 ColorAttachmentIndex = RenderPassConfig.Attachments.Count;
     vtk::attachment *ColorAttachment = ctk::Push(&RenderPassConfig.Attachments);
-    ColorAttachment->Description.format         = Swapchain.ImageFormat;
-    ColorAttachment->Description.samples        = VK_SAMPLE_COUNT_1_BIT;
-    ColorAttachment->Description.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
-    ColorAttachment->Description.storeOp        = VK_ATTACHMENT_STORE_OP_STORE; // Store rendered contents in memory.
-    ColorAttachment->Description.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
+    ColorAttachment->Description.format = Swapchain.ImageFormat;
+    ColorAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
+    ColorAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
+    ColorAttachment->Description.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // Store rendered contents in memory.
+    ColorAttachment->Description.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
     ColorAttachment->Description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
-    ColorAttachment->Description.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
-    ColorAttachment->Description.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    ColorAttachment->ClearValue                 = { 0.04f, 0.04f, 0.04f, 1.0f };
+    ColorAttachment->Description.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
+    ColorAttachment->Description.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    ColorAttachment->ClearValue = { 0.04f, 0.04f, 0.04f, 1.0f };
 
     // Subpasses
     vtk::subpass *Subpass = ctk::Push(&RenderPassConfig.Subpasses);
@@ -223,16 +223,16 @@ main()
     VkDescriptorBufferInfo DescriptorBufferInfo = {};
     DescriptorBufferInfo.buffer = MVPMatrixBuffer.Handle;
     DescriptorBufferInfo.offset = 0;
-    DescriptorBufferInfo.range  = VK_WHOLE_SIZE;
+    DescriptorBufferInfo.range = VK_WHOLE_SIZE;
 
     VkWriteDescriptorSet WriteDescriptorSets[1] = {};
-    WriteDescriptorSets[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    WriteDescriptorSets[0].dstSet          = DescriptorSets[0];
-    WriteDescriptorSets[0].dstBinding      = 0;
+    WriteDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    WriteDescriptorSets[0].dstSet = DescriptorSets[0];
+    WriteDescriptorSets[0].dstBinding = 0;
     WriteDescriptorSets[0].dstArrayElement = 0;
     WriteDescriptorSets[0].descriptorCount = 1;
-    WriteDescriptorSets[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    WriteDescriptorSets[0].pBufferInfo     = &DescriptorBufferInfo;
+    WriteDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    WriteDescriptorSets[0].pBufferInfo = &DescriptorBufferInfo;
 
     vkUpdateDescriptorSets(Device.Logical, CTK_ARRAY_COUNT(WriteDescriptorSets), WriteDescriptorSets, 0, NULL);
 
@@ -244,11 +244,11 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
-    GraphicsPipelineConfig.VertexLayout         = &VertexLayout;
+    GraphicsPipelineConfig.VertexLayout = &VertexLayout;
     GraphicsPipelineConfig.DescriptorSetLayouts = DescriptorSetLayouts;
-    GraphicsPipelineConfig.ViewportExtent       = Swapchain.Extent;
-    GraphicsPipelineConfig.PrimitiveTopology    = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipelineConfig.DepthTesting         = VK_TRUE;
+    GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
+    GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipelineConfig.DepthTesting = VK_TRUE;
 
     vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
 
@@ -258,11 +258,11 @@ main()
     VkRect2D RenderArea = {};
     RenderArea.offset.x = 0;
     RenderArea.offset.y = 0;
-    RenderArea.extent   = Swapchain.Extent;
+    RenderArea.extent = Swapchain.Extent;
 
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
-    CommandBufferBeginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    CommandBufferBeginInfo.flags            = 0;
+    CommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    CommandBufferBeginInfo.flags = 0;
     CommandBufferBeginInfo.pInheritanceInfo = NULL;
 
     VkBuffer VertexBuffers[] = { VertexBuffer.Handle };
@@ -275,12 +275,12 @@ main()
             vtk::ValidateVkResult(Result, "vkBeginCommandBuffer", "failed to begin recording command buffer");
         }
         VkRenderPassBeginInfo RenderPassBeginInfo = {};
-        RenderPassBeginInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        RenderPassBeginInfo.renderPass      = RenderPass.Handle;
-        RenderPassBeginInfo.framebuffer     = Framebuffers[FrameIndex];
-        RenderPassBeginInfo.renderArea      = RenderArea;
+        RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        RenderPassBeginInfo.renderPass = RenderPass.Handle;
+        RenderPassBeginInfo.framebuffer = Framebuffers[FrameIndex];
+        RenderPassBeginInfo.renderArea = RenderArea;
         RenderPassBeginInfo.clearValueCount = RenderPass.ClearValues.Count;
-        RenderPassBeginInfo.pClearValues    = RenderPass.ClearValues.Data;
+        RenderPassBeginInfo.pClearValues = RenderPass.ClearValues.Data;
 
         // Begin
         vkCmdBeginRenderPass(CommandBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -466,20 +466,20 @@ main()
         ////////////////////////////////////////////////////////////
         /// Submit Render Pass Command Buffer
         ////////////////////////////////////////////////////////////
-        VkSemaphore          QueueSubmitWaitSemaphores[]   = { CurrentFrame->ImageAquiredSemaphore           };
-        VkPipelineStageFlags QueueSubmitWaitStages[]       = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-        VkSemaphore          QueueSubmitSignalSemaphores[] = { CurrentFrame->RenderFinishedSemaphore         };
-        VkCommandBuffer      QueueSubmitCommandBuffers[]   = { CommandBuffers[SwapchainImageIndex]           };
+        VkSemaphore QueueSubmitWaitSemaphores[] = { CurrentFrame->ImageAquiredSemaphore };
+        VkPipelineStageFlags QueueSubmitWaitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        VkSemaphore QueueSubmitSignalSemaphores[] = { CurrentFrame->RenderFinishedSemaphore };
+        VkCommandBuffer QueueSubmitCommandBuffers[] = { CommandBuffers[SwapchainImageIndex] };
 
         VkSubmitInfo SubmitInfos[1] = {};
-        SubmitInfos[0].sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        SubmitInfos[0].waitSemaphoreCount   = CTK_ARRAY_COUNT(QueueSubmitWaitSemaphores);
-        SubmitInfos[0].pWaitSemaphores      = QueueSubmitWaitSemaphores;
-        SubmitInfos[0].pWaitDstStageMask    = QueueSubmitWaitStages;
-        SubmitInfos[0].commandBufferCount   = CTK_ARRAY_COUNT(QueueSubmitCommandBuffers);
-        SubmitInfos[0].pCommandBuffers      = QueueSubmitCommandBuffers;
+        SubmitInfos[0].sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        SubmitInfos[0].waitSemaphoreCount = CTK_ARRAY_COUNT(QueueSubmitWaitSemaphores);
+        SubmitInfos[0].pWaitSemaphores = QueueSubmitWaitSemaphores;
+        SubmitInfos[0].pWaitDstStageMask = QueueSubmitWaitStages;
+        SubmitInfos[0].commandBufferCount = CTK_ARRAY_COUNT(QueueSubmitCommandBuffers);
+        SubmitInfos[0].pCommandBuffers = QueueSubmitCommandBuffers;
         SubmitInfos[0].signalSemaphoreCount = CTK_ARRAY_COUNT(QueueSubmitSignalSemaphores);
-        SubmitInfos[0].pSignalSemaphores    = QueueSubmitSignalSemaphores;
+        SubmitInfos[0].pSignalSemaphores = QueueSubmitSignalSemaphores;
         {
             // Submit render pass commands to graphics queue for rendering.
             // Signal current frame's in flight flence when commands have finished executing.
@@ -496,13 +496,13 @@ main()
         u32 SwapchainImageIndexes[] = { SwapchainImageIndex };
 
         VkPresentInfoKHR PresentInfo = {};
-        PresentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         PresentInfo.waitSemaphoreCount = CTK_ARRAY_COUNT(QueueSubmitSignalSemaphores);
-        PresentInfo.pWaitSemaphores    = QueueSubmitSignalSemaphores;
-        PresentInfo.swapchainCount     = CTK_ARRAY_COUNT(Swapchains);
-        PresentInfo.pSwapchains        = Swapchains;
-        PresentInfo.pImageIndices      = SwapchainImageIndexes;
-        PresentInfo.pResults           = NULL;
+        PresentInfo.pWaitSemaphores = QueueSubmitSignalSemaphores;
+        PresentInfo.swapchainCount = CTK_ARRAY_COUNT(Swapchains);
+        PresentInfo.pSwapchains = Swapchains;
+        PresentInfo.pImageIndices = SwapchainImageIndexes;
+        PresentInfo.pResults = NULL;
         {
             // Submit Swapchains to present queue for presentation once rendering is complete.
             VkResult Result = vkQueuePresentKHR(Device.PresentQueue, &PresentInfo);

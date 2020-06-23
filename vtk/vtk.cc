@@ -20,21 +20,21 @@ namespace vtk {
 struct vk_result_debug_info
 {
     VkResult Result;
-    cstr     ResultName;
-    cstr     Message;
+    cstr ResultName;
+    cstr Message;
 };
 
 struct device_info
 {
-    VkPhysicalDeviceProperties          Properties;
-    VkPhysicalDeviceFeatures            Features;
-    VkPhysicalDeviceMemoryProperties    MemoryProperties;
-    VkSurfaceCapabilitiesKHR            SurfaceCapabilities;
-    ctk::array<VkExtensionProperties>   Extensions;
-    ctk::array<VkSurfaceFormatKHR>      SurfaceFormats;
-    ctk::array<VkPresentModeKHR>        SurfacePresentModes;
+    VkPhysicalDeviceProperties Properties;
+    VkPhysicalDeviceFeatures Features;
+    VkPhysicalDeviceMemoryProperties MemoryProperties;
+    VkSurfaceCapabilitiesKHR SurfaceCapabilities;
+    ctk::array<VkExtensionProperties> Extensions;
+    ctk::array<VkSurfaceFormatKHR> SurfaceFormats;
+    ctk::array<VkPresentModeKHR> SurfacePresentModes;
     ctk::array<VkQueueFamilyProperties> QueueFamilies;
-    queue_family_indexes                QueueFamilyIndexes;
+    queue_family_indexes QueueFamilyIndexes;
 };
 
 ////////////////////////////////////////////////////////////
@@ -191,22 +191,22 @@ CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sar
                      VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
 {
     VkApplicationInfo AppInfo = {};
-    AppInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    AppInfo.pNext              = NULL;
-    AppInfo.pApplicationName   = AppName;
+    AppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    AppInfo.pNext = NULL;
+    AppInfo.pApplicationName = AppName;
     AppInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    AppInfo.pEngineName        = AppName;
-    AppInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
-    AppInfo.apiVersion         = VK_API_VERSION_1_0;
+    AppInfo.pEngineName = AppName;
+    AppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    AppInfo.apiVersion = VK_API_VERSION_1_0;
 
     VkInstanceCreateInfo InstanceCreateInfo = {};
-    InstanceCreateInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    InstanceCreateInfo.pNext                   = DebugUtilsMessengerCreateInfo;
-    InstanceCreateInfo.flags                   = 0;
-    InstanceCreateInfo.pApplicationInfo        = &AppInfo;
-    InstanceCreateInfo.enabledLayerCount       = Layers->Count;
-    InstanceCreateInfo.ppEnabledLayerNames     = Layers->Data;
-    InstanceCreateInfo.enabledExtensionCount   = Extensions->Count;
+    InstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    InstanceCreateInfo.pNext = DebugUtilsMessengerCreateInfo;
+    InstanceCreateInfo.flags = 0;
+    InstanceCreateInfo.pApplicationInfo = &AppInfo;
+    InstanceCreateInfo.enabledLayerCount = Layers->Count;
+    InstanceCreateInfo.ppEnabledLayerNames = Layers->Data;
+    InstanceCreateInfo.enabledExtensionCount = Extensions->Count;
     InstanceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
 
     VkInstance Instance = {};
@@ -231,10 +231,10 @@ CreateQueueCreateInfo(u32 QueueFamilyIndex)
     static const f32 QUEUE_PRIORITIES[] = { 1.0f };
 
     VkDeviceQueueCreateInfo QueueCreateInfo = {};
-    QueueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    QueueCreateInfo.flags            = 0;
+    QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    QueueCreateInfo.flags = 0;
     QueueCreateInfo.queueFamilyIndex = QueueFamilyIndex;
-    QueueCreateInfo.queueCount       = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
+    QueueCreateInfo.queueCount = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
     QueueCreateInfo.pQueuePriorities = QUEUE_PRIORITIES;
 
     return QueueCreateInfo;
@@ -244,20 +244,20 @@ static VkImageView
 CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageAspectFlags AspectFlags)
 {
     VkImageViewCreateInfo ImageViewCreateInfo = {};
-    ImageViewCreateInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    ImageViewCreateInfo.image                           = Image;
-    ImageViewCreateInfo.flags                           = 0;
-    ImageViewCreateInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
-    ImageViewCreateInfo.format                          = Format;
-    ImageViewCreateInfo.components.r                    = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ImageViewCreateInfo.components.g                    = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ImageViewCreateInfo.components.b                    = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ImageViewCreateInfo.components.a                    = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ImageViewCreateInfo.subresourceRange.aspectMask     = AspectFlags;
-    ImageViewCreateInfo.subresourceRange.baseMipLevel   = 0;
-    ImageViewCreateInfo.subresourceRange.levelCount     = 1;
+    ImageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ImageViewCreateInfo.image = Image;
+    ImageViewCreateInfo.flags = 0;
+    ImageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ImageViewCreateInfo.format = Format;
+    ImageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ImageViewCreateInfo.subresourceRange.aspectMask = AspectFlags;
+    ImageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+    ImageViewCreateInfo.subresourceRange.levelCount = 1;
     ImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    ImageViewCreateInfo.subresourceRange.layerCount     = 1;
+    ImageViewCreateInfo.subresourceRange.layerCount = 1;
 
     VkImageView ImageView = {};
     VkResult Result = vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView);
@@ -311,8 +311,8 @@ BeginOneTimeCommandBuffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
     AllocateCommandBuffers(LogicalDevice, CommandPool, 1, &CommandBuffer);
 
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
-    CommandBufferBeginInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    CommandBufferBeginInfo.flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    CommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    CommandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     CommandBufferBeginInfo.pInheritanceInfo = NULL;
 
     vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo);
@@ -325,9 +325,9 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
     vkEndCommandBuffer(CommandBuffer);
 
     VkSubmitInfo SubmitInfo = {};
-    SubmitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     SubmitInfo.commandBufferCount = 1;
-    SubmitInfo.pCommandBuffers    = &CommandBuffer;
+    SubmitInfo.pCommandBuffers = &CommandBuffer;
 
     VkResult Result = vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE);
     ValidateVkResult(Result, "vkQueueSubmit", "failed to submit one-time command buffer to queue");
@@ -367,18 +367,18 @@ CreateInstance(instance_config *Config)
         ctk::Push(Layers, "VK_LAYER_LUNARG_standard_validation");
 
         VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {};
-        DebugUtilsMessengerCreateInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        DebugUtilsMessengerCreateInfo.pNext           = NULL;
-        DebugUtilsMessengerCreateInfo.flags           = 0;
+        DebugUtilsMessengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        DebugUtilsMessengerCreateInfo.pNext = NULL;
+        DebugUtilsMessengerCreateInfo.flags = 0;
         DebugUtilsMessengerCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
                                                         // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
                                                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        DebugUtilsMessengerCreateInfo.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        DebugUtilsMessengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
-        DebugUtilsMessengerCreateInfo.pUserData       = NULL;
+        DebugUtilsMessengerCreateInfo.pUserData = NULL;
 
         Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
@@ -548,11 +548,11 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             FoundSuitableDevice = true;
 
             // Initialize physical device with selected device info.
-            Device.Physical            = PhysicalDevice;
-            Device.MemoryProperties    = SelectedDeviceInfo.MemoryProperties;
-            Device.QueueFamilyIndexes  = SelectedDeviceInfo.QueueFamilyIndexes;
+            Device.Physical = PhysicalDevice;
+            Device.MemoryProperties = SelectedDeviceInfo.MemoryProperties;
+            Device.QueueFamilyIndexes = SelectedDeviceInfo.QueueFamilyIndexes;
             Device.SurfaceCapabilities = SelectedDeviceInfo.SurfaceCapabilities;
-            Device.SurfaceFormats      = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
+            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
             Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceInfo.SurfacePresentModes);
         }
         else
@@ -577,15 +577,15 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     }
 
     VkDeviceCreateInfo LogicalDeviceCreateInfo = {};
-    LogicalDeviceCreateInfo.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    LogicalDeviceCreateInfo.flags                   = 0;
-    LogicalDeviceCreateInfo.queueCreateInfoCount    = QueueCreateInfos.Count;
-    LogicalDeviceCreateInfo.pQueueCreateInfos       = QueueCreateInfos.Data;
-    LogicalDeviceCreateInfo.enabledLayerCount       = 0;
-    LogicalDeviceCreateInfo.ppEnabledLayerNames     = NULL;
-    LogicalDeviceCreateInfo.enabledExtensionCount   = Extensions->Count;
+    LogicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    LogicalDeviceCreateInfo.flags = 0;
+    LogicalDeviceCreateInfo.queueCreateInfoCount = QueueCreateInfos.Count;
+    LogicalDeviceCreateInfo.pQueueCreateInfos = QueueCreateInfos.Data;
+    LogicalDeviceCreateInfo.enabledLayerCount = 0;
+    LogicalDeviceCreateInfo.ppEnabledLayerNames = NULL;
+    LogicalDeviceCreateInfo.enabledExtensionCount = Extensions->Count;
     LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
-    LogicalDeviceCreateInfo.pEnabledFeatures        = &Config->Features;
+    LogicalDeviceCreateInfo.pEnabledFeatures = &Config->Features;
 
     VkResult Result = vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical);
     ValidateVkResult(Result, "vkCreateDevice", "failed to create logical device");
@@ -661,31 +661,31 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     u32 QueueFamilyIndexes[] = { GraphicsQueueFamilyIndex, PresentQueueFamilyIndex };
 
     VkSwapchainCreateInfoKHR SwapchainCreateInfo = {};
-    SwapchainCreateInfo.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    SwapchainCreateInfo.surface          = PlatformSurface;
-    SwapchainCreateInfo.flags            = 0;
-    SwapchainCreateInfo.minImageCount    = SelectedImageCount;
-    SwapchainCreateInfo.imageFormat      = SelectedFormat.format;
-    SwapchainCreateInfo.imageColorSpace  = SelectedFormat.colorSpace;
-    SwapchainCreateInfo.imageExtent      = Device->SurfaceCapabilities.currentExtent;
+    SwapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    SwapchainCreateInfo.surface = PlatformSurface;
+    SwapchainCreateInfo.flags = 0;
+    SwapchainCreateInfo.minImageCount = SelectedImageCount;
+    SwapchainCreateInfo.imageFormat = SelectedFormat.format;
+    SwapchainCreateInfo.imageColorSpace = SelectedFormat.colorSpace;
+    SwapchainCreateInfo.imageExtent = Device->SurfaceCapabilities.currentExtent;
     SwapchainCreateInfo.imageArrayLayers = 1; // Always 1 for standard images.
-    SwapchainCreateInfo.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    SwapchainCreateInfo.preTransform     = Device->SurfaceCapabilities.currentTransform;
-    SwapchainCreateInfo.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    SwapchainCreateInfo.presentMode      = SelectedPresentMode;
-    SwapchainCreateInfo.clipped          = VK_TRUE;
-    SwapchainCreateInfo.oldSwapchain     = VK_NULL_HANDLE;
+    SwapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    SwapchainCreateInfo.preTransform = Device->SurfaceCapabilities.currentTransform;
+    SwapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    SwapchainCreateInfo.presentMode = SelectedPresentMode;
+    SwapchainCreateInfo.clipped = VK_TRUE;
+    SwapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
     if(GraphicsQueueFamilyIndex != PresentQueueFamilyIndex)
     {
-        SwapchainCreateInfo.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
+        SwapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         SwapchainCreateInfo.queueFamilyIndexCount = CTK_ARRAY_COUNT(QueueFamilyIndexes);
-        SwapchainCreateInfo.pQueueFamilyIndices   = QueueFamilyIndexes;
+        SwapchainCreateInfo.pQueueFamilyIndices = QueueFamilyIndexes;
     }
     else
     {
-        SwapchainCreateInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+        SwapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         SwapchainCreateInfo.queueFamilyIndexCount = 0;
-        SwapchainCreateInfo.pQueueFamilyIndices   = NULL;
+        SwapchainCreateInfo.pQueueFamilyIndices = NULL;
     }
 
     VkResult Result = vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle);
@@ -716,8 +716,8 @@ VkCommandPool
 CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
 {
     VkCommandPoolCreateInfo CommandPoolCreateInfo = {};
-    CommandPoolCreateInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    CommandPoolCreateInfo.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    CommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    CommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     CommandPoolCreateInfo.queueFamilyIndex = QueueFamilyIndex;
 
     VkCommandPool CommandPool = {};
@@ -733,12 +733,12 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
 
     // Buffer Creation
     VkBufferCreateInfo BufferCreateInfo = {};
-    BufferCreateInfo.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    BufferCreateInfo.size                  = Size;
-    BufferCreateInfo.usage                 = UsageFlags;
-    BufferCreateInfo.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
+    BufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    BufferCreateInfo.size = Size;
+    BufferCreateInfo.usage = UsageFlags;
+    BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     BufferCreateInfo.queueFamilyIndexCount = 0;
-    BufferCreateInfo.pQueueFamilyIndices   = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    BufferCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
     {
         VkResult Result = vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle);
         ValidateVkResult(Result, "vkCreateBuffer", "failed to create buffer");
@@ -749,8 +749,8 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
 
     VkMemoryAllocateInfo MemoryAllocateInfo = {};
-    MemoryAllocateInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    MemoryAllocateInfo.allocationSize  = MemoryRequirements.size;
+    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              MemoryPropertyFlags);
 
@@ -811,36 +811,36 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     {
         subpass *Subpass = At(&Config->Subpasses, SubpassIndex);
         VkSubpassDescription *SubpassDescription = ctk::Push(&SubpassDescriptions);
-        SubpassDescription->pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        SubpassDescription->inputAttachmentCount    = 0;
-        SubpassDescription->pInputAttachments       = NULL;
-        SubpassDescription->colorAttachmentCount    = Subpass->ColorAttachmentReferences.Count;
-        SubpassDescription->pColorAttachments       = Subpass->ColorAttachmentReferences.Data;
-        SubpassDescription->pResolveAttachments     = NULL;
+        SubpassDescription->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        SubpassDescription->inputAttachmentCount = 0;
+        SubpassDescription->pInputAttachments = NULL;
+        SubpassDescription->colorAttachmentCount = Subpass->ColorAttachmentReferences.Count;
+        SubpassDescription->pColorAttachments = Subpass->ColorAttachmentReferences.Data;
+        SubpassDescription->pResolveAttachments = NULL;
         SubpassDescription->pDepthStencilAttachment = Subpass->DepthAttachmentReference ? &Subpass->DepthAttachmentReference.Value : NULL;
         SubpassDescription->preserveAttachmentCount = 0;
-        SubpassDescription->pPreserveAttachments    = NULL;
+        SubpassDescription->pPreserveAttachments = NULL;
     }
 
     VkSubpassDependency SubpassDependencies[1] = {};
-    SubpassDependencies[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
-    SubpassDependencies[0].dstSubpass    = 0;
-    SubpassDependencies[0].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SubpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    SubpassDependencies[0].dstSubpass = 0;
+    SubpassDependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     SubpassDependencies[0].srcAccessMask = 0;
-    SubpassDependencies[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    SubpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     SubpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
     ////////////////////////////////////////////////////////////
     /// Render Pass
     ////////////////////////////////////////////////////////////
     VkRenderPassCreateInfo RenderPassCreateInfo = {};
-    RenderPassCreateInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    RenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     RenderPassCreateInfo.attachmentCount = AttachmentDescriptions.Count;
-    RenderPassCreateInfo.pAttachments    = AttachmentDescriptions.Data;
-    RenderPassCreateInfo.subpassCount    = SubpassDescriptions.Count;
-    RenderPassCreateInfo.pSubpasses      = SubpassDescriptions.Data;
+    RenderPassCreateInfo.pAttachments = AttachmentDescriptions.Data;
+    RenderPassCreateInfo.subpassCount = SubpassDescriptions.Count;
+    RenderPassCreateInfo.pSubpasses = SubpassDescriptions.Data;
     RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
-    RenderPassCreateInfo.pDependencies   = SubpassDependencies;
+    RenderPassCreateInfo.pDependencies = SubpassDependencies;
 
     VkResult Result = vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle);
     ValidateVkResult(Result, "vkCreateRenderPass", "failed to create render pass");
@@ -852,13 +852,13 @@ VkFramebuffer
 CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_config *Config)
 {
     VkFramebufferCreateInfo FramebufferCreateInfo = {};
-    FramebufferCreateInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    FramebufferCreateInfo.renderPass      = RenderPass;
+    FramebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    FramebufferCreateInfo.renderPass = RenderPass;
     FramebufferCreateInfo.attachmentCount = Config->Attachments.Count;
-    FramebufferCreateInfo.pAttachments    = Config->Attachments.Data;
-    FramebufferCreateInfo.width           = Config->Extent.width;
-    FramebufferCreateInfo.height          = Config->Extent.height;
-    FramebufferCreateInfo.layers          = Config->Layers;
+    FramebufferCreateInfo.pAttachments = Config->Attachments.Data;
+    FramebufferCreateInfo.width = Config->Extent.width;
+    FramebufferCreateInfo.height = Config->Extent.height;
+    FramebufferCreateInfo.layers = Config->Layers;
 
     VkFramebuffer Framebuffer = {};
     VkResult Result = vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer);
@@ -870,9 +870,9 @@ void
 AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
 {
     VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
-    CommandBufferAllocateInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    CommandBufferAllocateInfo.commandPool        = CommandPool;
-    CommandBufferAllocateInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    CommandBufferAllocateInfo.commandPool = CommandPool;
+    CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     CommandBufferAllocateInfo.commandBufferCount = Count;
 
     VkResult Result = vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers);
@@ -887,10 +887,10 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Path);
 
     VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
-    ShaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    ShaderModuleCreateInfo.flags    = 0;
+    ShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    ShaderModuleCreateInfo.flags = 0;
     ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
-    ShaderModuleCreateInfo.pCode    = (const u32 *)ShaderByteCode.Data;
+    ShaderModuleCreateInfo.pCode = (const u32 *)ShaderByteCode.Data;
 
     VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle);
     ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
@@ -923,11 +923,11 @@ VkDescriptorPool
 CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
 {
     VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
-    DescriptorPoolCreateInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    DescriptorPoolCreateInfo.flags         = 0;
-    DescriptorPoolCreateInfo.maxSets       = Config->MaxSets;
+    DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    DescriptorPoolCreateInfo.flags = 0;
+    DescriptorPoolCreateInfo.maxSets = Config->MaxSets;
     DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
-    DescriptorPoolCreateInfo.pPoolSizes    = Config->Sizes.Data;
+    DescriptorPoolCreateInfo.pPoolSizes = Config->Sizes.Data;
 
     VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
     VkResult Result = vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool);
@@ -939,9 +939,9 @@ VkDescriptorSetLayout
 CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLayoutBinding, 4> *DescriptorSetLayoutBindings)
 {
     VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo = {};
-    DescriptorSetLayoutCreateInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings->Count;
-    DescriptorSetLayoutCreateInfo.pBindings    = DescriptorSetLayoutBindings->Data;
+    DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings->Data;
 
     VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
     VkResult Result = vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSetLayout);
@@ -953,15 +953,15 @@ void
 AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, ctk::sarray<VkDescriptorSetLayout, 4> *DescriptorSetLayouts,
                        ctk::sarray<VkDescriptorSet, 4> *DescriptorSets)
 {
-        VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
-        DescriptorSetAllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        DescriptorSetAllocateInfo.descriptorPool     = DescriptorPool;
-        DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
-        DescriptorSetAllocateInfo.pSetLayouts        = DescriptorSetLayouts->Data;
+    VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
+    DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
+    DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
+    DescriptorSetAllocateInfo.pSetLayouts = DescriptorSetLayouts->Data;
 
-        VkResult Result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
-        ValidateVkResult(Result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
-        DescriptorSets->Count = DescriptorSetLayouts->Count;
+    VkResult Result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
+    ValidateVkResult(Result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+    DescriptorSets->Count = DescriptorSetLayouts->Count;
 }
 
 graphics_pipeline
@@ -978,11 +978,11 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
         shader_module *ShaderModule = Config->ShaderModules[ShaderModuleIndex];
 
         VkPipelineShaderStageCreateInfo *ShaderStageCreateInfo = ctk::Push(&ShaderStages);
-        ShaderStageCreateInfo->sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        ShaderStageCreateInfo->flags               = 0;
-        ShaderStageCreateInfo->stage               = ShaderModule->StageBit;
-        ShaderStageCreateInfo->module              = ShaderModule->Handle;
-        ShaderStageCreateInfo->pName               = "main";
+        ShaderStageCreateInfo->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        ShaderStageCreateInfo->flags = 0;
+        ShaderStageCreateInfo->stage = ShaderModule->StageBit;
+        ShaderStageCreateInfo->module = ShaderModule->Handle;
+        ShaderStageCreateInfo->pName = "main";
         ShaderStageCreateInfo->pSpecializationInfo = NULL;
     }
 
@@ -997,116 +997,116 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
 
         VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexAttributeDescriptions);
         AttributeDescription->location = VertexInput->Location;
-        AttributeDescription->binding  = VertexInput->Binding;
-        AttributeDescription->format   = VertexAttribute->Format;
-        AttributeDescription->offset   = VertexAttribute->Offset;
+        AttributeDescription->binding = VertexInput->Binding;
+        AttributeDescription->format = VertexAttribute->Format;
+        AttributeDescription->offset = VertexAttribute->Offset;
     }
 
     ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
     VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexBindingDescriptions);
-    BindingDescription->binding   = 0;
-    BindingDescription->stride    = Config->VertexLayout->Size;
+    BindingDescription->binding = 0;
+    BindingDescription->stride = Config->VertexLayout->Size;
     BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     VkPipelineVertexInputStateCreateInfo VertexInputState = {};
-    VertexInputState.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    VertexInputState.vertexBindingDescriptionCount   = VertexBindingDescriptions.Count;
-    VertexInputState.pVertexBindingDescriptions      = VertexBindingDescriptions.Data;
+    VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    VertexInputState.vertexBindingDescriptionCount = VertexBindingDescriptions.Count;
+    VertexInputState.pVertexBindingDescriptions = VertexBindingDescriptions.Data;
     VertexInputState.vertexAttributeDescriptionCount = VertexAttributeDescriptions.Count;
-    VertexInputState.pVertexAttributeDescriptions    = VertexAttributeDescriptions.Data;
+    VertexInputState.pVertexAttributeDescriptions = VertexAttributeDescriptions.Data;
 
     ////////////////////////////////////////////////////////////
     /// Input Assembly State
     ////////////////////////////////////////////////////////////
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
-    InputAssemblyState.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyState.topology               = Config->PrimitiveTopology;
+    InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    InputAssemblyState.topology = Config->PrimitiveTopology;
     InputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
     ////////////////////////////////////////////////////////////
     /// Viewport State
     ////////////////////////////////////////////////////////////
     VkViewport Viewport = {};
-    Viewport.x        = 0.0f;
-    Viewport.y        = 0.0f;
-    Viewport.width    = (f32)Config->ViewportExtent.width;
-    Viewport.height   = (f32)Config->ViewportExtent.height;
+    Viewport.x = 0.0f;
+    Viewport.y = 0.0f;
+    Viewport.width = (f32)Config->ViewportExtent.width;
+    Viewport.height = (f32)Config->ViewportExtent.height;
     Viewport.minDepth = 0.0f;
     Viewport.maxDepth = 1.0f;
 
     // Make scissor fill viewport.
     VkRect2D Scissor = {};
-    Scissor.offset.x      = 0;
-    Scissor.offset.y      = 0;
-    Scissor.extent.width  = Viewport.width;
+    Scissor.offset.x = 0;
+    Scissor.offset.y = 0;
+    Scissor.extent.width = Viewport.width;
     Scissor.extent.height = Viewport.height;
 
     VkPipelineViewportStateCreateInfo ViewportState = {};
-    ViewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     ViewportState.viewportCount = 1;
-    ViewportState.pViewports    = &Viewport;
-    ViewportState.scissorCount  = 1;
-    ViewportState.pScissors     = &Scissor;
+    ViewportState.pViewports = &Viewport;
+    ViewportState.scissorCount = 1;
+    ViewportState.pScissors = &Scissor;
 
     ////////////////////////////////////////////////////////////
     /// Depth Stencil State
     ////////////////////////////////////////////////////////////
     VkPipelineDepthStencilStateCreateInfo DepthStencilState = {};
-    DepthStencilState.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    DepthStencilState.depthTestEnable       = Config->DepthTesting;
-    DepthStencilState.depthWriteEnable      = Config->DepthTesting;
-    DepthStencilState.depthCompareOp        = VK_COMPARE_OP_LESS;
+    DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    DepthStencilState.depthTestEnable = Config->DepthTesting;
+    DepthStencilState.depthWriteEnable = Config->DepthTesting;
+    DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
     DepthStencilState.depthBoundsTestEnable = VK_FALSE;
-    DepthStencilState.stencilTestEnable     = VK_FALSE;
-    DepthStencilState.front                 = {};
-    DepthStencilState.back                  = {};
-    DepthStencilState.minDepthBounds        = 0.0f;
-    DepthStencilState.maxDepthBounds        = 1.0f;
+    DepthStencilState.stencilTestEnable = VK_FALSE;
+    DepthStencilState.front = {};
+    DepthStencilState.back = {};
+    DepthStencilState.minDepthBounds = 0.0f;
+    DepthStencilState.maxDepthBounds = 1.0f;
 
     ////////////////////////////////////////////////////////////
     /// Default State
     ////////////////////////////////////////////////////////////
     VkPipelineRasterizationStateCreateInfo RasterizationState = {};
-    RasterizationState.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    RasterizationState.depthClampEnable        = VK_FALSE; // Don't clamp fragments within depth range.
+    RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    RasterizationState.depthClampEnable = VK_FALSE; // Don't clamp fragments within depth range.
     RasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    RasterizationState.polygonMode             = VK_POLYGON_MODE_FILL; // Only available mode on AMD gpus?
-    RasterizationState.cullMode                = VK_CULL_MODE_BACK_BIT;
-    RasterizationState.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    RasterizationState.depthBiasEnable         = VK_FALSE;
+    RasterizationState.polygonMode = VK_POLYGON_MODE_FILL; // Only available mode on AMD gpus?
+    RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+    RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    RasterizationState.depthBiasEnable = VK_FALSE;
     RasterizationState.depthBiasConstantFactor = 0.0f;
-    RasterizationState.depthBiasClamp          = 0.0f;
-    RasterizationState.depthBiasSlopeFactor    = 0.0f;
-    RasterizationState.lineWidth               = 1.0f;
+    RasterizationState.depthBiasClamp = 0.0f;
+    RasterizationState.depthBiasSlopeFactor = 0.0f;
+    RasterizationState.lineWidth = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo MultisampleState = {};
-    MultisampleState.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    MultisampleState.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
-    MultisampleState.sampleShadingEnable   = VK_FALSE;
-    MultisampleState.minSampleShading      = 1.0f;
-    MultisampleState.pSampleMask           = NULL;
+    MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    MultisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    MultisampleState.sampleShadingEnable = VK_FALSE;
+    MultisampleState.minSampleShading = 1.0f;
+    MultisampleState.pSampleMask = NULL;
     MultisampleState.alphaToCoverageEnable = VK_FALSE;
-    MultisampleState.alphaToOneEnable      = VK_FALSE;
+    MultisampleState.alphaToOneEnable = VK_FALSE;
 
     VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
-    ColorBlendAttachmentState.blendEnable         = VK_FALSE;
+    ColorBlendAttachmentState.blendEnable = VK_FALSE;
     ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
     ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.colorBlendOp        = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
     ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
     ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.alphaBlendOp        = VK_BLEND_OP_ADD;
-    ColorBlendAttachmentState.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT |
-                                                    VK_COLOR_COMPONENT_G_BIT |
-                                                    VK_COLOR_COMPONENT_B_BIT |
-                                                    VK_COLOR_COMPONENT_A_BIT;
+    ColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                               VK_COLOR_COMPONENT_G_BIT |
+                                               VK_COLOR_COMPONENT_B_BIT |
+                                               VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineColorBlendStateCreateInfo ColorBlendState = {};
-    ColorBlendState.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    ColorBlendState.logicOpEnable     = VK_FALSE;
-    ColorBlendState.logicOp           = VK_LOGIC_OP_COPY;
-    ColorBlendState.attachmentCount   = 1;
-    ColorBlendState.pAttachments      = &ColorBlendAttachmentState;
+    ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    ColorBlendState.logicOpEnable = VK_FALSE;
+    ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    ColorBlendState.attachmentCount = 1;
+    ColorBlendState.pAttachments = &ColorBlendAttachmentState;
     ColorBlendState.blendConstants[0] = 0.0f;
     ColorBlendState.blendConstants[1] = 0.0f;
     ColorBlendState.blendConstants[2] = 0.0f;
@@ -1116,11 +1116,11 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     /// Pipeline Layout
     ////////////////////////////////////////////////////////////
     VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
-    LayoutCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    LayoutCreateInfo.setLayoutCount         = Config->DescriptorSetLayouts.Count;
-    LayoutCreateInfo.pSetLayouts            = Config->DescriptorSetLayouts.Data;
+    LayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    LayoutCreateInfo.setLayoutCount = Config->DescriptorSetLayouts.Count;
+    LayoutCreateInfo.pSetLayouts = Config->DescriptorSetLayouts.Data;
     LayoutCreateInfo.pushConstantRangeCount = 0;
-    LayoutCreateInfo.pPushConstantRanges    = NULL;
+    LayoutCreateInfo.pPushConstantRanges = NULL;
     {
         VkResult Result = vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout);
         ValidateVkResult(Result, "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
@@ -1130,23 +1130,23 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     /// Graphics Pipeline
     ////////////////////////////////////////////////////////////
     VkGraphicsPipelineCreateInfo GraphicsPipelineCreateInfo = {};
-    GraphicsPipelineCreateInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    GraphicsPipelineCreateInfo.stageCount          = ShaderStages.Count;
-    GraphicsPipelineCreateInfo.pStages             = ShaderStages.Data;
-    GraphicsPipelineCreateInfo.pVertexInputState   = &VertexInputState;
+    GraphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    GraphicsPipelineCreateInfo.stageCount = ShaderStages.Count;
+    GraphicsPipelineCreateInfo.pStages = ShaderStages.Data;
+    GraphicsPipelineCreateInfo.pVertexInputState = &VertexInputState;
     GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
-    GraphicsPipelineCreateInfo.pTessellationState  = NULL;
-    GraphicsPipelineCreateInfo.pViewportState      = &ViewportState;
+    GraphicsPipelineCreateInfo.pTessellationState = NULL;
+    GraphicsPipelineCreateInfo.pViewportState = &ViewportState;
     GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
-    GraphicsPipelineCreateInfo.pMultisampleState   = &MultisampleState;
-    GraphicsPipelineCreateInfo.pDepthStencilState  = &DepthStencilState;
-    GraphicsPipelineCreateInfo.pColorBlendState    = &ColorBlendState;
-    GraphicsPipelineCreateInfo.pDynamicState       = NULL;
-    GraphicsPipelineCreateInfo.layout              = GraphicsPipeline.Layout;
-    GraphicsPipelineCreateInfo.renderPass          = RenderPass;
-    GraphicsPipelineCreateInfo.subpass             = 0;
-    GraphicsPipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
-    GraphicsPipelineCreateInfo.basePipelineIndex   = -1;
+    GraphicsPipelineCreateInfo.pMultisampleState = &MultisampleState;
+    GraphicsPipelineCreateInfo.pDepthStencilState = &DepthStencilState;
+    GraphicsPipelineCreateInfo.pColorBlendState = &ColorBlendState;
+    GraphicsPipelineCreateInfo.pDynamicState = NULL;
+    GraphicsPipelineCreateInfo.layout = GraphicsPipeline.Layout;
+    GraphicsPipelineCreateInfo.renderPass = RenderPass;
+    GraphicsPipelineCreateInfo.subpass = 0;
+    GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+    GraphicsPipelineCreateInfo.basePipelineIndex = -1;
     {
         VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
                                                     VK_NULL_HANDLE, // Pipeline Cache
@@ -1167,9 +1167,9 @@ CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount
     for(u32 _ = 0; _ < FrameCount; ++_)
     {
         frame *Frame = ctk::Push(&FrameState.Frames);
-        Frame->ImageAquiredSemaphore   = CreateSemaphore(LogicalDevice);
+        Frame->ImageAquiredSemaphore = CreateSemaphore(LogicalDevice);
         Frame->RenderFinishedSemaphore = CreateSemaphore(LogicalDevice);
-        Frame->InFlightFence           = CreateFence(LogicalDevice);
+        Frame->InFlightFence = CreateFence(LogicalDevice);
     }
     for(u32 _ = 0; _ < SwapchainImageCount; ++_)
     {
