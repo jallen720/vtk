@@ -76,6 +76,29 @@ struct buffer
 {
     VkBuffer Handle;
     VkDeviceMemory Memory;
+    VkDeviceSize Size;
+};
+
+struct image_config
+{
+    u32 Width;
+    u32 Height;
+    VkFormat Format;
+    VkImageTiling Tiling;
+    VkImageUsageFlags UsageFlags;
+    VkMemoryPropertyFlags MemoryPropertyFlags;
+    VkImageAspectFlags AspectMask;
+};
+
+struct image
+{
+    VkImage Handle;
+    VkDeviceMemory Memory;
+    VkDeviceSize Width;
+    VkDeviceSize Height;
+    VkFormat Format;
+    VkImageView View;
+    VkSampler Sampler;
 };
 
 struct attachment
@@ -200,6 +223,10 @@ void
 DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer);
 
 VTK_API
+image
+CreateImage(device *Device, image_config *Config);
+
+VTK_API
 render_pass
 CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config);
 
@@ -247,6 +274,14 @@ WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, Vk
 VTK_API
 void
 WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
+
+VTK_API
+VkFormat
+FindDepthImageFormat(VkPhysicalDevice PhysicalDevice);
+
+VTK_API
+void
+TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout);
 
 VTK_API
 void

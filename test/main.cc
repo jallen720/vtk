@@ -16,11 +16,12 @@
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
+static ctk::vec2<f64> UNSET_MOUSE_POSITION = { -10000.0, -10000.0 };
 struct app_state
 {
     b32 KeyDown[GLFW_KEY_LAST + 1];
     b32 MouseButtonDown[GLFW_MOUSE_BUTTON_LAST + 1];
-    ctk::vec2<f64> MousePosition;
+    ctk::vec2<f64> MousePosition = UNSET_MOUSE_POSITION;
     ctk::vec2<f64> MouseDelta;
 };
 
@@ -59,9 +60,7 @@ MouseButtonCallback(GLFWwindow *Window, s32 button, s32 Action, s32 Mods)
 s32
 main()
 {
-    static ctk::vec2<f64> UNSET_MOUSE_POSITION = { -10000.0, -10000.0 };
     app_state AppState = {};
-    AppState.MousePosition = UNSET_MOUSE_POSITION;
     ctk::data Config = ctk::LoadData("assets/test_config.ctkd");
 
     ////////////////////////////////////////////////////////////
@@ -141,6 +140,21 @@ main()
     vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
 
     ////////////////////////////////////////////////////////////
+    /// Depth Image
+    ////////////////////////////////////////////////////////////
+    vtk::image_config DepthImageConfig = {};
+    DepthImageConfig.Width = Swapchain.Extent.width;
+    DepthImageConfig.Height = Swapchain.Extent.height;
+    DepthImageConfig.Format = vtk::FindDepthImageFormat(Device.Physical);
+    DepthImageConfig.Tiling = VK_IMAGE_TILING_OPTIMAL;
+    DepthImageConfig.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    DepthImageConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    DepthImageConfig.AspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    vtk::image DepthImage = vtk::CreateImage(&Device, &DepthImageConfig);
+    vtk::TransitionImageLayout(&Device, GraphicsCommandPool, &DepthImage,
+                               VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+    ////////////////////////////////////////////////////////////
     /// Render Pass
     ////////////////////////////////////////////////////////////
     vtk::render_pass_config RenderPassConfig = {};
@@ -158,12 +172,28 @@ main()
     ColorAttachment->Description.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     ColorAttachment->ClearValue = { 0.04f, 0.04f, 0.04f, 1.0f };
 
+    u32 DepthAttachmentIndex = RenderPassConfig.Attachments.Count;
+    vtk::attachment *DepthAttachment = ctk::Push(&RenderPassConfig.Attachments);
+    DepthAttachment->Description.format = DepthImage.Format;
+    DepthAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
+    DepthAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
+    DepthAttachment->Description.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Store rendered contents in memory.
+    DepthAttachment->Description.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Not currently relevant.
+    DepthAttachment->Description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
+    DepthAttachment->Description.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
+    DepthAttachment->Description.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    DepthAttachment->ClearValue = { 1.0f, 0.0f };
+
     // Subpasses
     vtk::subpass *Subpass = ctk::Push(&RenderPassConfig.Subpasses);
 
     VkAttachmentReference *ColorAttachmentReference = ctk::Push(&Subpass->ColorAttachmentReferences);
     ColorAttachmentReference->attachment = ColorAttachmentIndex;
     ColorAttachmentReference->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    Subpass->DepthAttachmentReference.Set = true;
+    Subpass->DepthAttachmentReference.Value.attachment = DepthAttachmentIndex;
+    Subpass->DepthAttachmentReference.Value.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     // Creation
     vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, &RenderPassConfig);
@@ -174,6 +204,7 @@ main()
     {
         vtk::framebuffer_config FramebufferConfig = {};
         ctk::Push(&FramebufferConfig.Attachments, Swapchain.Images[FramebufferIndex].View);
+        ctk::Push(&FramebufferConfig.Attachments, DepthImage.View);
         FramebufferConfig.Extent = Swapchain.Extent;
         FramebufferConfig.Layers = 1;
         ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.Handle, &FramebufferConfig));

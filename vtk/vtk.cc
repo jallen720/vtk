@@ -433,7 +433,6 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         // vkGetPhysicalDevicePresentRectanglesKHR
         // vkGetPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR
         // vkGetPhysicalDeviceSparseImageFormatProperties
-        // vkGetPhysicalDeviceFormatProperties
 
         // Collect requirements data.
         vkGetPhysicalDeviceProperties(PhysicalDevice, &SelectedDeviceInfo.Properties);
@@ -730,6 +729,7 @@ buffer
 CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags)
 {
     buffer Buffer = {};
+    Buffer.Size = Size;
 
     // Buffer Creation
     VkBufferCreateInfo BufferCreateInfo = {};
@@ -753,6 +753,7 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              MemoryPropertyFlags);
+
 
     // SOURCE: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer
     // It should be noted that in a real world application, you're not supposed to actually call vkAllocateMemory for
@@ -780,6 +781,94 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 {
     vkDestroyBuffer(LogicalDevice, Buffer->Handle, NULL);
     vkFreeMemory(LogicalDevice, Buffer->Memory, NULL);
+}
+
+image
+CreateImage(device *Device, image_config *Config)
+{
+    image Image = {};
+    Image.Width = Config->Width;
+    Image.Height = Config->Height;
+    Image.Format = Config->Format;
+
+    ////////////////////////////////////////////////////////////
+    /// Vulkan Image
+    ////////////////////////////////////////////////////////////
+    VkImageCreateInfo ImageCreateInfo = {};
+    ImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ImageCreateInfo.flags = 0;
+    ImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+    ImageCreateInfo.format = Config->Format;
+    ImageCreateInfo.extent.width = Config->Width;
+    ImageCreateInfo.extent.height = Config->Height;
+    ImageCreateInfo.extent.depth = 1;
+    ImageCreateInfo.mipLevels = 1;
+    ImageCreateInfo.arrayLayers = 1;
+    ImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    ImageCreateInfo.tiling = Config->Tiling;
+    ImageCreateInfo.usage = Config->UsageFlags;
+    ImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    ImageCreateInfo.queueFamilyIndexCount = 0;
+    ImageCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    ImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    {
+        VkResult Result = vkCreateImage(Device->Logical, &ImageCreateInfo, NULL, &Image.Handle);
+        ValidateVkResult(Result, "vkCreateImage", "failed to create image");
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Memory Allocation
+    ////////////////////////////////////////////////////////////
+    VkMemoryRequirements MemoryRequirements = {};
+    vkGetImageMemoryRequirements(Device->Logical, Image.Handle, &MemoryRequirements);
+
+    VkMemoryAllocateInfo MemoryAllocateInfo = {};
+    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
+    MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
+                                                             Config->MemoryPropertyFlags);
+    {
+        VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory);
+        ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for image");
+    }
+
+    // Bind device memory to image object.
+    {
+        VkResult Result = vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0);
+        ValidateVkResult(Result, "vkBindImageMemory", "failed to bind image memory");
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// View
+    ////////////////////////////////////////////////////////////
+    Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, Config->AspectMask);
+
+    ////////////////////////////////////////////////////////////
+    /// Sampler
+    ////////////////////////////////////////////////////////////
+    VkSamplerCreateInfo SamplerCreateInfo = {};
+    SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    SamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+    SamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+    SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    SamplerCreateInfo.maxAnisotropy = 16;
+    SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    SamplerCreateInfo.compareEnable = VK_FALSE;
+    SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    SamplerCreateInfo.mipLodBias = 0.0f;
+    SamplerCreateInfo.minLod = 0.0f;
+    SamplerCreateInfo.maxLod = 0.0f;
+    {
+        VkResult Result = vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler);
+        ValidateVkResult(Result, "vkCreateSampler", "failed to create sampler");
+    }
+
+    return Image;
 }
 
 render_pass
@@ -1208,6 +1297,112 @@ WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buff
 
     // Cleanup
     DestroyBuffer(Device->Logical, &SourceBuffer);
+}
+
+VkFormat
+FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
+{
+    static const VkFormat DEPTH_IMAGE_FORMATS[] =
+    {
+        VK_FORMAT_D24_UNORM_S8_UINT,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+    };
+    static const VkFormatFeatureFlags DEPTH_IMG_FORMAT_FEATURES = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    for(u32 DepthImageFormatIndex = 0; DepthImageFormatIndex < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); DepthImageFormatIndex++)
+    {
+        VkFormat DepthImageFormat = DEPTH_IMAGE_FORMATS[DepthImageFormatIndex];
+        VkFormatProperties DepthImageFormatProperties = {};
+        vkGetPhysicalDeviceFormatProperties(PhysicalDevice, DepthImageFormat, &DepthImageFormatProperties);
+        if((DepthImageFormatProperties.optimalTilingFeatures & DEPTH_IMG_FORMAT_FEATURES) == DEPTH_IMG_FORMAT_FEATURES)
+        {
+            return DepthImageFormat;
+        }
+    }
+    CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
+}
+
+void
+TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout)
+{
+    // Calculate source/destination access mask and pipeline stage mask.
+    VkAccessFlags SourceAccessMask = 0;
+    VkAccessFlags DestinationAccessMask = 0;
+    VkPipelineStageFlags SourcePipelineStageMask = 0;
+    VkPipelineStageFlags DestinationPipelineStageMask = 0;
+    if(OldLayout == VK_IMAGE_LAYOUT_UNDEFINED && NewLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    {
+        SourceAccessMask = 0;
+        DestinationAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        SourcePipelineStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        DestinationPipelineStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if(OldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && NewLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        SourceAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        DestinationAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        SourcePipelineStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        DestinationPipelineStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else if(OldLayout == VK_IMAGE_LAYOUT_UNDEFINED && NewLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    {
+        SourceAccessMask = 0;
+        DestinationAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        SourcePipelineStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        DestinationPipelineStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    else
+    {
+        CTK_FATAL("unsupported layout transition")
+    }
+
+    // Calculate aspect flags based on new layout of image.
+    VkImageAspectFlags AspectMask = 0;
+
+    // Use depth aspect for depth image attachment.
+    if(NewLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    {
+        AspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+        // Add stencil flag if image format has a stencil component.
+        if(Image->Format == VK_FORMAT_D32_SFLOAT_S8_UINT || Image->Format == VK_FORMAT_D24_UNORM_S8_UINT)
+        {
+            AspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+    }
+    // Use color aspect for all other image attachments.
+    else
+    {
+        AspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
+    VkImageMemoryBarrier ImageMemoryBarrier = {};
+    ImageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    ImageMemoryBarrier.srcAccessMask = SourceAccessMask;
+    ImageMemoryBarrier.dstAccessMask = DestinationAccessMask;
+    ImageMemoryBarrier.oldLayout = OldLayout;
+    ImageMemoryBarrier.newLayout = NewLayout;
+    ImageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ImageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ImageMemoryBarrier.image = Image->Handle;
+    ImageMemoryBarrier.subresourceRange.aspectMask = AspectMask;
+    ImageMemoryBarrier.subresourceRange.baseMipLevel = 0;
+    ImageMemoryBarrier.subresourceRange.levelCount = 1;
+    ImageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+    ImageMemoryBarrier.subresourceRange.layerCount = 1;
+
+    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+        vkCmdPipelineBarrier(CommandBuffer,
+                             SourcePipelineStageMask,
+                             DestinationPipelineStageMask,
+                             0, // Dependency Flags
+                             0, // Memory Barrier Count
+                             NULL, // Memory Barriers
+                             0, // Buffer Memory Barrier Count
+                             NULL, // Buffer Memory Barriers
+                             1, // Image Memory Count
+                             &ImageMemoryBarrier); // Image Memory Barriers
+    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
 }
 
 void
