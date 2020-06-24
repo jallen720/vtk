@@ -2,7 +2,7 @@ const { readdirSync, unlinkSync } = require("fs");
 const { join } = require("path");
 const { exec } = require("child_process");
 
-const SHADER_DIRECTORY = join(__dirname, "assets", "shaders");
+const SHADER_DIRECTORY = join(__dirname, "test_assets", "shaders");
 
 // Clear all SPIR-V shaders.
 readdirSync(SHADER_DIRECTORY)

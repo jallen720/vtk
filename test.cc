@@ -62,7 +62,7 @@ s32
 main()
 {
     app_state AppState = {};
-    ctk::data Config = ctk::LoadData("assets/test_config.ctkd");
+    ctk::data Config = ctk::LoadData("test_assets/test_config.ctkd");
 
     ////////////////////////////////////////////////////////////
     /// Window
@@ -234,9 +234,9 @@ main()
     /// Shader Modules
     ////////////////////////////////////////////////////////////
     vtk::shader_module VertexShader =
-        vtk::CreateShaderModule(Device.Logical, "assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
     vtk::shader_module FragmentShader =
-        vtk::CreateShaderModule(Device.Logical, "assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     ////////////////////////////////////////////////////////////
     /// Vertex Layout
@@ -460,6 +460,7 @@ main()
         ////////////////////////////////////////////////////////////
         alignas(16) glm::mat4 MVPMatrixes[2] = {};
 
+        // View Matrix
         glm::mat4 CameraMatrix(1.0f);
         CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.x), { 1.0f, 0.0f, 0.0f });
         CameraMatrix = glm::rotate(CameraMatrix, glm::radians(CameraRotation.y), { 0.0f, 1.0f, 0.0f });
@@ -468,9 +469,12 @@ main()
         glm::vec3 CameraForward = { CameraMatrix[0][2], CameraMatrix[1][2], CameraMatrix[2][2] };
         glm::mat4 ViewMatrix = glm::lookAt(CameraPosition, CameraPosition + CameraForward, { 0.0f, -1.0f, 0.0f });
 
-        glm::mat4 ProjectionMatrix = glm::perspective(glm::radians(90.0f), Swapchain.Extent.width / (f32)Swapchain.Extent.height, 0.1f, 1000.0f);
+        // Projection Matrix
+        f32 Aspect = Swapchain.Extent.width / (f32)Swapchain.Extent.height;
+        glm::mat4 ProjectionMatrix = glm::perspective(glm::radians(90.0f), Aspect, 0.1f, 1000.0f);
         ProjectionMatrix[1][1] *= -1; // Flip y value for scale (glm is designed for OpenGL).
 
+        // Entity Model Matrixes
         for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
         {
             glm::mat4 ModelMatrix(1.0f);
@@ -479,7 +483,6 @@ main()
             ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 1.0f, 0.0f });
             ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 0.0f, 1.0f });
             ModelMatrix = scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
-
             MVPMatrixes[EntityIndex] = ProjectionMatrix * ViewMatrix * ModelMatrix;
         }
         vtk::WriteToHostRegion(Device.Logical, &MVPMatrixRegion, MVPMatrixes, sizeof(glm::mat4) * 2, 0);
