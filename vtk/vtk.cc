@@ -730,6 +730,7 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
 {
     buffer Buffer = {};
     Buffer.Size = Size;
+    Buffer.End = 0;
 
     // Buffer Creation
     VkBufferCreateInfo BufferCreateInfo = {};
@@ -739,40 +740,21 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     BufferCreateInfo.queueFamilyIndexCount = 0;
     BufferCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
-    {
-        VkResult Result = vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle);
-        ValidateVkResult(Result, "vkCreateBuffer", "failed to create buffer");
-    }
+    ValidateVkResult(vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle),
+                     "vkCreateBuffer", "failed to create buffer");
 
-    // Memory Allocation
+    // Memory Allocation & Binding
     VkMemoryRequirements MemoryRequirements = {};
     vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
-
     VkMemoryAllocateInfo MemoryAllocateInfo = {};
     MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              MemoryPropertyFlags);
-
-
-    // SOURCE: https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer
-    // It should be noted that in a real world application, you're not supposed to actually call vkAllocateMemory for
-    // every individual buffer. The maximum number of simultaneous memory allocations is limited by the
-    // maxMemoryAllocationCount physical device limit, which may be as low as 4096 even on high end hardware like an
-    // NVIDIA GTX 1080. The right way to allocate memory for a large number of objects at the same time is to create a
-    // custom allocator that splits up a single allocation among many different objects by using the offset parameters
-    // that we've seen in many functions.
-    {
-        ctk::Info("buffer mem-type index: %u", MemoryAllocateInfo.memoryTypeIndex);
-        VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory);
-        ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for buffer");
-    }
-
-    // Bind device memory to buffer object.
-    {
-        VkResult Result = vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0);
-        ValidateVkResult(Result, "vkBindBufferMemory", "failed to bind buffer memory");
-    }
+    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory),
+                     "vkAllocateMemory", "failed to allocate memory for buffer");
+    ValidateVkResult(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
+                     "vkBindBufferMemory", "failed to bind buffer memory");
 
     return Buffer;
 }
@@ -782,6 +764,21 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 {
     vkDestroyBuffer(LogicalDevice, Buffer->Handle, NULL);
     vkFreeMemory(LogicalDevice, Buffer->Memory, NULL);
+}
+
+region
+AllocateRegion(buffer *Buffer, VkDeviceSize Size)
+{
+    if(Buffer->End + Size >= Buffer->Size)
+    {
+        CTK_FATAL("buffer (size=%u end=%u) does not have room to allocate region of size %u", Buffer->Size, Buffer->End, Size);
+    }
+    region Region = {};
+    Region.Buffer = Buffer;
+    Region.Offset = Buffer->End;
+    Region.Size = Size;
+    Buffer->End += Size;
+    return Region;
 }
 
 image
@@ -829,7 +826,6 @@ CreateImage(device *Device, image_config *Config)
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              Config->MemoryPropertyFlags);
     {
-        ctk::Info("image mem-type index: %u", MemoryAllocateInfo.memoryTypeIndex);
         VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory);
         ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for image");
     }
@@ -1270,28 +1266,35 @@ CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount
 }
 
 void
-WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset)
+WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
+    if(OffsetIntoRegion + Size > Region->Size)
+    {
+        CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", Size, OffsetIntoRegion, Region->Size);
+    }
     void *MappedMemory = NULL;
-    VkResult Result = vkMapMemory(LogicalDevice, Buffer->Memory, Offset, Size, 0, &MappedMemory);
-    ValidateVkResult(Result, "vkMapMemory", "failed to map host coherent buffer to host memory");
+    ValidateVkResult(vkMapMemory(LogicalDevice, Region->Buffer->Memory, Region->Offset + OffsetIntoRegion, Size, 0, &MappedMemory),
+                     "vkMapMemory", "failed to map host coherent buffer to host memory");
     memcpy(MappedMemory, Data, Size);
-    vkUnmapMemory(LogicalDevice, Buffer->Memory);
+    vkUnmapMemory(LogicalDevice, Region->Buffer->Memory);
 }
 
 void
-WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *StagingBuffer, buffer *Buffer,
-                         void *Data, VkDeviceSize Size, VkDeviceSize Offset)
+WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
+                   void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
-    WriteToHostCoherentBuffer(Device->Logical, StagingBuffer, Data, Size, Offset);
-
-    VkBufferCopy BufferCopy = {};
-    BufferCopy.srcOffset = 0;
-    BufferCopy.dstOffset = 0;
-    BufferCopy.size = Size;
-
+    if(OffsetIntoRegion + Size > Region->Size)
+    {
+        CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", Size, OffsetIntoRegion, Region->Size);
+    }
+    WriteToHostRegion(Device->Logical, StagingRegion, Data, Size, 0);
+    VkBufferCopy BufferCopyRegions[1] = {};
+    BufferCopyRegions[0].srcOffset = StagingRegion->Offset;
+    BufferCopyRegions[0].dstOffset = Region->Offset + OffsetIntoRegion;
+    BufferCopyRegions[0].size = Size;
     VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
-        vkCmdCopyBuffer(CommandBuffer, StagingBuffer->Handle, Buffer->Handle, 1, &BufferCopy);
+        vkCmdCopyBuffer(CommandBuffer, StagingRegion->Buffer->Handle, Region->Buffer->Handle,
+                        CTK_ARRAY_COUNT(BufferCopyRegions), BufferCopyRegions);
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
 }
 

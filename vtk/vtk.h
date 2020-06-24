@@ -77,6 +77,14 @@ struct buffer
     VkBuffer Handle;
     VkDeviceMemory Memory;
     VkDeviceSize Size;
+    VkDeviceSize End;
+};
+
+struct region
+{
+    buffer *Buffer;
+    VkDeviceSize Size;
+    VkDeviceSize Offset;
 };
 
 struct image_config
@@ -223,6 +231,10 @@ void
 DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer);
 
 VTK_API
+region
+AllocateRegion(buffer *Buffer, VkDeviceSize Size);
+
+VTK_API
 image
 CreateImage(device *Device, image_config *Config);
 
@@ -269,12 +281,12 @@ CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount
 
 VTK_API
 void
-WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
+WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion);
 
 VTK_API
 void
-WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *StagingBuffer, buffer *Buffer,
-                         void *Data, VkDeviceSize Size, VkDeviceSize Offset);
+WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
+                    void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion);
 
 VTK_API
 VkFormat

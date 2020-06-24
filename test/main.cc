@@ -16,6 +16,7 @@
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
+static const u32 MEGABYTE = 1000000;
 static ctk::vec2<f64> UNSET_MOUSE_POSITION = { -10000.0, -10000.0 };
 struct app_state
 {
@@ -134,19 +135,24 @@ main()
     u32 Indexes[] = { 0, 1, 2, 0, 2, 3 };
 
     // Buffers
-    vtk::buffer StagingBuffer = vtk::CreateBuffer(&Device, 1000000, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes),
-                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, 2 * MEGABYTE,
+                                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, 2 * MEGABYTE,
+                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vtk::buffer IndexBuffer = vtk::CreateBuffer(&Device, sizeof(Indexes),
-                                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4) * 2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &StagingBuffer, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
-    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &StagingBuffer, &IndexBuffer, Indexes, sizeof(Indexes), 0);
+    // Regions
+    vtk::region MVPMatrixRegion = vtk::AllocateRegion(&HostBuffer, sizeof(glm::mat4) * 2);
+    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, MEGABYTE);
+    vtk::region VertexRegion = vtk::AllocateRegion(&DeviceBuffer, sizeof(Vertexes));
+    vtk::region IndexRegion = vtk::AllocateRegion(&DeviceBuffer, sizeof(Indexes));
+    vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &VertexRegion, Vertexes, sizeof(Vertexes), 0);
+    vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &IndexRegion, Indexes, sizeof(Indexes), 0);
 
     ////////////////////////////////////////////////////////////
     /// Depth Image
@@ -261,9 +267,9 @@ main()
 
     // Updates
     VkDescriptorBufferInfo DescriptorBufferInfo = {};
-    DescriptorBufferInfo.buffer = MVPMatrixBuffer.Handle;
-    DescriptorBufferInfo.offset = 0;
-    DescriptorBufferInfo.range = VK_WHOLE_SIZE;
+    DescriptorBufferInfo.buffer = MVPMatrixRegion.Buffer->Handle;
+    DescriptorBufferInfo.offset = MVPMatrixRegion.Offset;
+    DescriptorBufferInfo.range = MVPMatrixRegion.Size;
 
     VkWriteDescriptorSet WriteDescriptorSets[1] = {};
     WriteDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -305,8 +311,8 @@ main()
     CommandBufferBeginInfo.flags = 0;
     CommandBufferBeginInfo.pInheritanceInfo = NULL;
 
-    VkBuffer VertexBuffers[] = { VertexBuffer.Handle };
-    VkDeviceSize VertexBufferOffsets[] = { 0 };
+    VkBuffer VertexBuffers[] = { VertexRegion.Buffer->Handle };
+    VkDeviceSize VertexBufferOffsets[] = { VertexRegion.Offset };
     for(u32 FrameIndex = 0; FrameIndex < Swapchain.Images.Count; ++FrameIndex)
     {
         VkCommandBuffer CommandBuffer = CommandBuffers[FrameIndex];
@@ -333,8 +339,8 @@ main()
                                VertexBuffers,
                                VertexBufferOffsets);
         vkCmdBindIndexBuffer(CommandBuffer,
-                             IndexBuffer.Handle,
-                             0, // Offset
+                             IndexRegion.Buffer->Handle,
+                             IndexRegion.Offset,
                              VK_INDEX_TYPE_UINT32);
         for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
         {
@@ -481,7 +487,7 @@ main()
 
             MVPMatrixes[EntityIndex] = ProjectionMatrix * ViewMatrix * ModelMatrix;
         }
-        vtk::WriteToHostCoherentBuffer(Device.Logical, &MVPMatrixBuffer, MVPMatrixes, sizeof(glm::mat4) * 2, 0);
+        vtk::WriteToHostRegion(Device.Logical, &MVPMatrixRegion, MVPMatrixes, sizeof(glm::mat4) * 2, 0);
 
         ////////////////////////////////////////////////////////////
         /// Rendering
