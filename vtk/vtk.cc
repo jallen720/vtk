@@ -726,17 +726,16 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
 }
 
 buffer
-CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags)
+CreateBuffer(device *Device, buffer_config *Config)
 {
     buffer Buffer = {};
-    Buffer.Size = Size;
-    Buffer.End = 0;
+    Buffer.Size = Config->Size;
 
     // Buffer Creation
     VkBufferCreateInfo BufferCreateInfo = {};
     BufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    BufferCreateInfo.size = Size;
-    BufferCreateInfo.usage = UsageFlags;
+    BufferCreateInfo.size = Config->Size;
+    BufferCreateInfo.usage = Config->UsageFlags;
     BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     BufferCreateInfo.queueFamilyIndexCount = 0;
     BufferCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
@@ -750,7 +749,7 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
-                                                             MemoryPropertyFlags);
+                                                             Config->MemoryPropertyFlags);
     ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory),
                      "vkAllocateMemory", "failed to allocate memory for buffer");
     ValidateVkResult(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
@@ -809,10 +808,7 @@ CreateImage(device *Device, image_config *Config)
     ImageCreateInfo.queueFamilyIndexCount = 0;
     ImageCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
     ImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    {
-        VkResult Result = vkCreateImage(Device->Logical, &ImageCreateInfo, NULL, &Image.Handle);
-        ValidateVkResult(Result, "vkCreateImage", "failed to create image");
-    }
+    ValidateVkResult(vkCreateImage(Device->Logical, &ImageCreateInfo, NULL, &Image.Handle), "vkCreateImage", "failed to create image");
 
     ////////////////////////////////////////////////////////////
     /// Memory Allocation
@@ -825,16 +821,10 @@ CreateImage(device *Device, image_config *Config)
     MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              Config->MemoryPropertyFlags);
-    {
-        VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory);
-        ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for image");
-    }
-
-    // Bind device memory to image object.
-    {
-        VkResult Result = vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0);
-        ValidateVkResult(Result, "vkBindImageMemory", "failed to bind image memory");
-    }
+    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory),
+                     "vkAllocateMemory", "failed to allocate memory for image");
+    ValidateVkResult(vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0),
+                     "vkBindImageMemory", "failed to bind image memory");
 
     ////////////////////////////////////////////////////////////
     /// View
@@ -861,10 +851,8 @@ CreateImage(device *Device, image_config *Config)
     SamplerCreateInfo.mipLodBias = 0.0f;
     SamplerCreateInfo.minLod = 0.0f;
     SamplerCreateInfo.maxLod = 0.0f;
-    {
-        VkResult Result = vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler);
-        ValidateVkResult(Result, "vkCreateSampler", "failed to create sampler");
-    }
+    ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler),
+                     "vkCreateSampler", "failed to create sampler");
 
     return Image;
 }

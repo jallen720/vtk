@@ -72,6 +72,13 @@ struct swapchain
     VkExtent2D Extent;
 };
 
+struct buffer_config
+{
+    VkDeviceSize Size;
+    VkBufferUsageFlags UsageFlags;
+    VkMemoryPropertyFlags MemoryPropertyFlags;
+};
+
 struct buffer
 {
     VkBuffer Handle;
@@ -224,7 +231,7 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex);
 
 VTK_API
 buffer
-CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryPropertyFlags);
+CreateBuffer(device *Device, buffer_config *Config);
 
 VTK_API
 void

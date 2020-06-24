@@ -135,16 +135,17 @@ main()
     u32 Indexes[] = { 0, 1, 2, 0, 2, 3 };
 
     // Buffers
-    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, 2 * MEGABYTE,
-                                               VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-                                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, 2 * MEGABYTE,
-                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vtk::buffer_config HostBufferConfig = {};
+    HostBufferConfig.Size = 2 * MEGABYTE;
+    HostBufferConfig.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    HostBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferConfig);
+
+    vtk::buffer_config DeviceBufferConfig = {};
+    DeviceBufferConfig.Size = 2 * MEGABYTE;
+    DeviceBufferConfig.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    DeviceBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
 
     // Regions
     vtk::region MVPMatrixRegion = vtk::AllocateRegion(&HostBuffer, sizeof(glm::mat4) * 2);
