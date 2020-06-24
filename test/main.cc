@@ -296,7 +296,6 @@ main()
     GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsPipelineConfig.DepthTesting = VK_TRUE;
-
     vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
 
     ////////////////////////////////////////////////////////////
@@ -317,10 +316,8 @@ main()
     for(u32 FrameIndex = 0; FrameIndex < Swapchain.Images.Count; ++FrameIndex)
     {
         VkCommandBuffer CommandBuffer = CommandBuffers[FrameIndex];
-        {
-            VkResult Result = vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo);
-            vtk::ValidateVkResult(Result, "vkBeginCommandBuffer", "failed to begin recording command buffer");
-        }
+        vtk::ValidateVkResult(vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo),
+                              "vkBeginCommandBuffer", "failed to begin recording command buffer");
         VkRenderPassBeginInfo RenderPassBeginInfo = {};
         RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         RenderPassBeginInfo.renderPass = RenderPass.Handle;
@@ -364,10 +361,7 @@ main()
 
         // End
         vkCmdEndRenderPass(CommandBuffer);
-        {
-            VkResult Result = vkEndCommandBuffer(CommandBuffer);
-            vtk::ValidateVkResult(Result, "vkEndCommandBuffer", "error during render pass command recording");
-        }
+        vtk::ValidateVkResult(vkEndCommandBuffer(CommandBuffer), "vkEndCommandBuffer", "error during render pass command recording");
     }
 
     ////////////////////////////////////////////////////////////

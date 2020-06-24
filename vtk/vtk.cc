@@ -208,10 +208,8 @@ CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sar
     InstanceCreateInfo.ppEnabledLayerNames = Layers->Data;
     InstanceCreateInfo.enabledExtensionCount = Extensions->Count;
     InstanceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
-
-    VkInstance Instance = {};
-    VkResult Result = vkCreateInstance(&InstanceCreateInfo, NULL, &Instance);
-    ValidateVkResult(Result, "vkCreateInstance", "failed to create Vulkan instance");
+    VkInstance Instance = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateInstance(&InstanceCreateInfo, NULL, &Instance), "vkCreateInstance", "failed to create Vulkan instance");
     return Instance;
 }
 
@@ -258,10 +256,9 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
     ImageViewCreateInfo.subresourceRange.levelCount = 1;
     ImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
     ImageViewCreateInfo.subresourceRange.layerCount = 1;
-
-    VkImageView ImageView = {};
-    VkResult Result = vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView);
-    ValidateVkResult(Result, "vkCreateImageView", "failed to create image view");
+    VkImageView ImageView = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView),
+                     "vkCreateImageView", "failed to create image view");
     return ImageView;
 }
 
@@ -277,7 +274,7 @@ FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties *MemoryProperties, u32 Memo
             return MemoryTypeIndex;
         }
     }
-    CTK_FATAL("failed to find memory type")
+    CTK_FATAL("failed to find memory type index")
 }
 
 static VkSemaphore
@@ -286,9 +283,9 @@ CreateSemaphore(VkDevice LogicalDevice)
     VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
     SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     SemaphoreCreateInfo.flags = 0;
-    VkSemaphore Semaphore = {};
-    VkResult Result = vkCreateSemaphore(LogicalDevice, &SemaphoreCreateInfo, NULL, &Semaphore);
-    ValidateVkResult(Result, "vkCreateSemaphore", "failed to create semaphore");
+    VkSemaphore Semaphore = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateSemaphore(LogicalDevice, &SemaphoreCreateInfo, NULL, &Semaphore),
+                     "vkCreateSemaphore", "failed to create semaphore");
     return Semaphore;
 }
 
@@ -298,9 +295,8 @@ CreateFence(VkDevice LogicalDevice)
     VkFenceCreateInfo FenceCreateInfo = {};
     FenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    VkFence Fence = {};
-    VkResult Result = vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence);
-    ValidateVkResult(Result, "vkCreateFence", "failed to create fence");
+    VkFence Fence = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence), "vkCreateFence", "failed to create fence");
     return Fence;
 }
 
@@ -328,9 +324,8 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
     SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     SubmitInfo.commandBufferCount = 1;
     SubmitInfo.pCommandBuffers = &CommandBuffer;
-
-    VkResult Result = vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE);
-    ValidateVkResult(Result, "vkQueueSubmit", "failed to submit one-time command buffer to queue");
+    ValidateVkResult(vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE),
+                     "vkQueueSubmit", "failed to submit one-time command buffer to queue");
     vkQueueWaitIdle(Queue);
 
     // Cleanup
@@ -380,12 +375,14 @@ CreateInstance(instance_config *Config)
         DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
         DebugUtilsMessengerCreateInfo.pUserData = NULL;
 
+        // Create Instance
         Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
+        // Create Debug Utils Messenger
         LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
-        VkResult Result = vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
-                                                         &Instance.DebugUtilsMessenger);
-        ValidateVkResult(Result, "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
+        ValidateVkResult(vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
+                                                        &Instance.DebugUtilsMessenger),
+                         "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
     }
     else
     {
@@ -585,9 +582,8 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     LogicalDeviceCreateInfo.enabledExtensionCount = Extensions->Count;
     LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
     LogicalDeviceCreateInfo.pEnabledFeatures = &Config->Features;
-
-    VkResult Result = vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical);
-    ValidateVkResult(Result, "vkCreateDevice", "failed to create logical device");
+    ValidateVkResult(vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical),
+                     "vkCreateDevice", "failed to create logical device");
 
     // Get logical device queues.
     static const u32 QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
@@ -686,9 +682,8 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
         SwapchainCreateInfo.queueFamilyIndexCount = 0;
         SwapchainCreateInfo.pQueueFamilyIndices = NULL;
     }
-
-    VkResult Result = vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle);
-    ValidateVkResult(Result, "vkCreateSwapchainKHR", "failed to create swapchain");
+    ValidateVkResult(vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle),
+                     "vkCreateSwapchainKHR", "failed to create swapchain");
 
     ////////////////////////////////////////////////////////////
     /// Swapchain Image Creation
@@ -718,10 +713,9 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
     CommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     CommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     CommandPoolCreateInfo.queueFamilyIndex = QueueFamilyIndex;
-
-    VkCommandPool CommandPool = {};
-    VkResult Result = vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool);
-    ValidateVkResult(Result, "vkCreateCommandPool", "failed to create command pool");
+    VkCommandPool CommandPool = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool),
+                     "vkCreateCommandPool", "failed to create command pool");
     return CommandPool;
 }
 
@@ -916,9 +910,8 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     RenderPassCreateInfo.pSubpasses = SubpassDescriptions.Data;
     RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
     RenderPassCreateInfo.pDependencies = SubpassDependencies;
-
-    VkResult Result = vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle);
-    ValidateVkResult(Result, "vkCreateRenderPass", "failed to create render pass");
+    ValidateVkResult(vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle),
+                     "vkCreateRenderPass", "failed to create render pass");
 
     return RenderPass;
 }
@@ -934,10 +927,9 @@ CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_c
     FramebufferCreateInfo.width = Config->Extent.width;
     FramebufferCreateInfo.height = Config->Extent.height;
     FramebufferCreateInfo.layers = Config->Layers;
-
-    VkFramebuffer Framebuffer = {};
-    VkResult Result = vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer);
-    ValidateVkResult(Result, "vkCreateFramebuffer", "failed to create framebuffer");
+    VkFramebuffer Framebuffer = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
+                     "vkCreateFramebuffer", "failed to create framebuffer");
     return Framebuffer;
 }
 
@@ -949,9 +941,8 @@ AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Co
     CommandBufferAllocateInfo.commandPool = CommandPool;
     CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     CommandBufferAllocateInfo.commandBufferCount = Count;
-
-    VkResult Result = vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers);
-    ValidateVkResult(Result, "vkAllocateCommandBuffers", "failed to allocate command buffer");
+    ValidateVkResult(vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers),
+                     "vkAllocateCommandBuffers", "failed to allocate command buffer");
 }
 
 shader_module
@@ -966,9 +957,8 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     ShaderModuleCreateInfo.flags = 0;
     ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
     ShaderModuleCreateInfo.pCode = (const u32 *)ShaderByteCode.Data;
-
-    VkResult Result = vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle);
-    ValidateVkResult(Result, "vkCreateShaderModule", "failed to create shader module");
+    ValidateVkResult(vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle),
+                     "vkCreateShaderModule", "failed to create shader module");
 
     // Cleanup
     Free(&ShaderByteCode);
@@ -1003,10 +993,9 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
     DescriptorPoolCreateInfo.maxSets = Config->MaxSets;
     DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
     DescriptorPoolCreateInfo.pPoolSizes = Config->Sizes.Data;
-
     VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
-    VkResult Result = vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool);
-    ValidateVkResult(Result, "vkCreateDescriptorPool", "failed to create descriptor pool");
+    ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
+                     "vkCreateDescriptorPool", "failed to create descriptor pool");
     return DescriptorPool;
 }
 
@@ -1017,10 +1006,9 @@ CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLay
     DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings->Count;
     DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings->Data;
-
     VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
-    VkResult Result = vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSetLayout);
-    ValidateVkResult(Result, "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
+    ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSetLayout),
+                     "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
     return DescriptorSetLayout;
 }
 
@@ -1033,9 +1021,8 @@ AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, 
     DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
     DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
     DescriptorSetAllocateInfo.pSetLayouts = DescriptorSetLayouts->Data;
-
-    VkResult Result = vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data);
-    ValidateVkResult(Result, "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+    ValidateVkResult(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data),
+                     "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
     DescriptorSets->Count = DescriptorSetLayouts->Count;
 }
 
@@ -1196,10 +1183,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     LayoutCreateInfo.pSetLayouts = Config->DescriptorSetLayouts.Data;
     LayoutCreateInfo.pushConstantRangeCount = 0;
     LayoutCreateInfo.pPushConstantRanges = NULL;
-    {
-        VkResult Result = vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout);
-        ValidateVkResult(Result, "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
-    }
+    ValidateVkResult(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),
+                     "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
@@ -1222,15 +1207,13 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     GraphicsPipelineCreateInfo.subpass = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex = -1;
-    {
-        VkResult Result = vkCreateGraphicsPipelines(LogicalDevice,
-                                                    VK_NULL_HANDLE, // Pipeline Cache
-                                                    1,
-                                                    &GraphicsPipelineCreateInfo,
-                                                    NULL, // Allocation Callbacks
-                                                    &GraphicsPipeline.Handle);
-        ValidateVkResult(Result, "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
-    }
+    ValidateVkResult(vkCreateGraphicsPipelines(LogicalDevice,
+                                               VK_NULL_HANDLE, // Pipeline Cache
+                                               1,
+                                               &GraphicsPipelineCreateInfo,
+                                               NULL, // Allocation Callbacks
+                                               &GraphicsPipeline.Handle),
+                     "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
 
     return GraphicsPipeline;
 }
