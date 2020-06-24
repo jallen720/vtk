@@ -1,11 +1,14 @@
-#include "vtk/vtk.h"
+#pragma once
+
+#include <vulkan/vulkan.h>
+#include "ctk/ctk.h"
 
 ////////////////////////////////////////////////////////////
 /// Macros
 ////////////////////////////////////////////////////////////
-#define VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
-
-#define LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNCTION_NAME) \
+#define VTK_UNSET_INDEX CTK_U32_MAX
+#define VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
+#define VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNCTION_NAME) \
     auto FUNCTION_NAME = (PFN_ ## FUNCTION_NAME)vkGetInstanceProcAddr(INSTANCE, #FUNCTION_NAME); \
     if(FUNCTION_NAME == NULL) \
     { \
@@ -17,6 +20,198 @@ namespace vtk {
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
+struct instance_config
+{
+    ctk::sarray<cstr, 8> Layers;
+    ctk::sarray<cstr, 8> Extensions;
+    b32 Debug;
+    cstr AppName;
+};
+
+struct instance
+{
+    VkInstance Handle;
+    VkDebugUtilsMessengerEXT DebugUtilsMessenger;
+};
+
+struct device_config
+{
+    ctk::sarray<cstr, 8> Extensions;
+    VkPhysicalDeviceFeatures Features;
+};
+
+struct queue_family_indexes
+{
+    u32 Graphics = VTK_UNSET_INDEX;
+    u32 Present = VTK_UNSET_INDEX;
+};
+
+struct device
+{
+    VkPhysicalDevice Physical;
+    VkPhysicalDeviceMemoryProperties MemoryProperties;
+    queue_family_indexes QueueFamilyIndexes;
+    VkSurfaceCapabilitiesKHR SurfaceCapabilities;
+    ctk::array<VkSurfaceFormatKHR> SurfaceFormats;
+    ctk::array<VkPresentModeKHR> SurfacePresentModes;
+
+    VkDevice Logical;
+    VkQueue GraphicsQueue;
+    VkQueue PresentQueue;
+};
+
+struct swapchain_image
+{
+    VkImage Handle;
+    VkImageView View;
+};
+
+struct swapchain
+{
+    VkSwapchainKHR Handle;
+    ctk::sarray<swapchain_image, 4> Images;
+    VkFormat ImageFormat;
+    VkExtent2D Extent;
+};
+
+struct buffer_config
+{
+    VkDeviceSize Size;
+    VkBufferUsageFlags UsageFlags;
+    VkMemoryPropertyFlags MemoryPropertyFlags;
+};
+
+struct buffer
+{
+    VkBuffer Handle;
+    VkDeviceMemory Memory;
+    VkDeviceSize Size;
+    VkDeviceSize End;
+};
+
+struct region
+{
+    buffer *Buffer;
+    VkDeviceSize Size;
+    VkDeviceSize Offset;
+};
+
+struct image_config
+{
+    u32 Width;
+    u32 Height;
+    VkFormat Format;
+    VkImageTiling Tiling;
+    VkImageUsageFlags UsageFlags;
+    VkMemoryPropertyFlags MemoryPropertyFlags;
+    VkImageAspectFlags AspectMask;
+};
+
+struct image
+{
+    VkImage Handle;
+    VkDeviceMemory Memory;
+    VkDeviceSize Width;
+    VkDeviceSize Height;
+    VkFormat Format;
+    VkImageView View;
+    VkSampler Sampler;
+};
+
+struct attachment
+{
+    VkAttachmentDescription Description;
+    VkClearValue ClearValue;
+};
+
+struct subpass
+{
+    ctk::sarray<VkAttachmentReference, 4> ColorAttachmentReferences;
+    ctk::optional<VkAttachmentReference> DepthAttachmentReference;
+};
+
+struct render_pass_config
+{
+    ctk::sarray<attachment, 4> Attachments;
+    ctk::sarray<subpass, 4> Subpasses;
+};
+
+struct render_pass
+{
+    VkRenderPass Handle;
+    ctk::sarray<VkClearValue, 4> ClearValues;
+};
+
+struct framebuffer_config
+{
+    ctk::sarray<VkImageView, 4> Attachments;
+    VkExtent2D Extent;
+    u32 Layers;
+};
+
+struct shader_module
+{
+    VkShaderModule Handle;
+    VkShaderStageFlagBits StageBit;
+};
+
+struct vertex_attribute
+{
+    VkFormat Format;
+    u32 Size;
+    u32 Offset;
+};
+
+struct vertex_layout
+{
+    ctk::sarray<vertex_attribute, 4> Attributes;
+    u32 Size;
+};
+
+struct vertex_input
+{
+    u32 Location;
+    u32 Binding;
+    u32 AttributeIndex;
+};
+
+struct descriptor_pool_config
+{
+    ctk::sarray<VkDescriptorPoolSize, 12> Sizes;
+    u32 MaxSets;
+};
+
+struct graphics_pipeline_config
+{
+    ctk::sarray<shader_module *, 4> ShaderModules;
+    ctk::sarray<vertex_input, 4> VertexInputs;
+    vertex_layout *VertexLayout;
+    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
+    VkExtent2D ViewportExtent;
+    VkPrimitiveTopology PrimitiveTopology;
+    VkBool32 DepthTesting;
+};
+
+struct graphics_pipeline
+{
+    VkPipeline Handle;
+    VkPipelineLayout Layout;
+};
+
+struct frame
+{
+    VkSemaphore ImageAquiredSemaphore;
+    VkSemaphore RenderFinishedSemaphore;
+    VkFence InFlightFence;
+};
+
+struct frame_state
+{
+    ctk::sarray<frame, 4> Frames;
+    ctk::sarray<VkFence, 4> PreviousFrameInFlightFences;
+    u32 CurrentFrameIndex;
+};
+
 struct vk_result_debug_info
 {
     VkResult Result;
@@ -65,37 +260,37 @@ OutputVkResult(VkResult Result, cstr FunctionName)
 {
     static vk_result_debug_info VK_RESULT_DEBUG_INFOS[] =
     {
-        { VK_RESULT_NAME(VK_SUCCESS), "VULKAN SPEC ERROR MESSAGE: Command successfully completed." },
-        { VK_RESULT_NAME(VK_NOT_READY), "VULKAN SPEC ERROR MESSAGE: A fence or query has not yet completed." },
-        { VK_RESULT_NAME(VK_TIMEOUT), "VULKAN SPEC ERROR MESSAGE: A wait operation has not completed in the specified time." },
-        { VK_RESULT_NAME(VK_EVENT_SET), "VULKAN SPEC ERROR MESSAGE: An event is signaled." },
-        { VK_RESULT_NAME(VK_EVENT_RESET), "VULKAN SPEC ERROR MESSAGE: An event is unsignaled." },
-        { VK_RESULT_NAME(VK_INCOMPLETE), "VULKAN SPEC ERROR MESSAGE: A return array was too small for the result." },
-        { VK_RESULT_NAME(VK_SUBOPTIMAL_KHR), "VULKAN SPEC ERROR MESSAGE: A swapchain no longer matches the surface properties exactly, but can still be used to present to the surface successfully." },
-        { VK_RESULT_NAME(VK_ERROR_OUT_OF_HOST_MEMORY), "VULKAN SPEC ERROR MESSAGE: A host memory allocation has failed." },
-        { VK_RESULT_NAME(VK_ERROR_OUT_OF_DEVICE_MEMORY), "VULKAN SPEC ERROR MESSAGE: A device memory allocation has failed." },
-        { VK_RESULT_NAME(VK_ERROR_INITIALIZATION_FAILED), "VULKAN SPEC ERROR MESSAGE: Initialization of an object could not be completed for implementation-specific reasons." },
-        { VK_RESULT_NAME(VK_ERROR_DEVICE_LOST), "VULKAN SPEC ERROR MESSAGE: The logical or physical device has been lost." },
-        { VK_RESULT_NAME(VK_ERROR_MEMORY_MAP_FAILED), "VULKAN SPEC ERROR MESSAGE: Mapping of a memory object has failed." },
-        { VK_RESULT_NAME(VK_ERROR_LAYER_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested layer is not present or could not be loaded." },
-        { VK_RESULT_NAME(VK_ERROR_EXTENSION_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested extension is not supported." },
-        { VK_RESULT_NAME(VK_ERROR_FEATURE_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested feature is not supported." },
-        { VK_RESULT_NAME(VK_ERROR_INCOMPATIBLE_DRIVER), "VULKAN SPEC ERROR MESSAGE: The requested version of Vulkan is not supported by the driver or is otherwise incompatible for implementation-specific reasons." },
-        { VK_RESULT_NAME(VK_ERROR_TOO_MANY_OBJECTS), "VULKAN SPEC ERROR MESSAGE: Too many objects of the type have already been created." },
-        { VK_RESULT_NAME(VK_ERROR_FORMAT_NOT_SUPPORTED), "VULKAN SPEC ERROR MESSAGE: A requested format is not supported on this device." },
-        { VK_RESULT_NAME(VK_ERROR_FRAGMENTED_POOL), "VULKAN SPEC ERROR MESSAGE: A pool allocation has failed due to fragmentation of the pool’s memory. This must only be returned if no attempt to allocate host or device memory was made to accommodate the new allocation. This should be returned in preference to VK_ERROR_OUT_OF_POOL_MEMORY, but only if the implementation is certain that the pool allocation failure was due to fragmentation." },
-        { VK_RESULT_NAME(VK_ERROR_SURFACE_LOST_KHR), "VULKAN SPEC ERROR MESSAGE: A surface is no longer available." },
-        { VK_RESULT_NAME(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR), "VULKAN SPEC ERROR MESSAGE: The requested window is already in use by Vulkan or another API in a manner which prevents it from being used again." },
-        { VK_RESULT_NAME(VK_ERROR_OUT_OF_DATE_KHR), "VULKAN SPEC ERROR MESSAGE: A surface has changed in such a way that it is no longer compatible with the swapchain, and further presentation requests using the swapchain will fail. Applications must query the new surface properties and recreate their swapchain if they wish to continue presenting to the surface." },
-        { VK_RESULT_NAME(VK_ERROR_INCOMPATIBLE_DISPLAY_KHR), "VULKAN SPEC ERROR MESSAGE: The display used by a swapchain does not use the same presentable image layout, or is incompatible in a way that prevents sharing an image." },
-        { VK_RESULT_NAME(VK_ERROR_INVALID_SHADER_NV), "VULKAN SPEC ERROR MESSAGE: One or more shaders failed to compile or link. More details are reported back to the application via https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#VK_EXT_debug_report if enabled." },
-        { VK_RESULT_NAME(VK_ERROR_OUT_OF_POOL_MEMORY), "VULKAN SPEC ERROR MESSAGE: A pool memory allocation has failed. This must only be returned if no attempt to allocate host or device memory was made to accommodate the new allocation. If the failure was definitely due to fragmentation of the pool, VK_ERROR_FRAGMENTED_POOL should be returned instead." },
-        { VK_RESULT_NAME(VK_ERROR_INVALID_EXTERNAL_HANDLE), "VULKAN SPEC ERROR MESSAGE: An external handle is not a valid handle of the specified type." },
-        // { VK_RESULT_NAME(VK_ERROR_FRAGMENTATION), "VULKAN SPEC ERROR MESSAGE: A descriptor pool creation has failed due to fragmentation." },
-        { VK_RESULT_NAME(VK_ERROR_INVALID_DEVICE_ADDRESS_EXT), "VULKAN SPEC ERROR MESSAGE: A buffer creation failed because the requested address is not available." },
-        // { VK_RESULT_NAME(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS), "VULKAN SPEC ERROR MESSAGE: A buffer creation or memory allocation failed because the requested address is not available." },
-        { VK_RESULT_NAME(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT), "VULKAN SPEC ERROR MESSAGE: An operation on a swapchain created with VK_FULL_SCREEN_EXCLUSIVE_APPLICATION_CONTROLLED_EXT failed as it did not have exlusive full-screen access. This may occur due to implementation-dependent reasons, outside of the application’s control." },
-        // { VK_RESULT_NAME(VK_ERROR_UNKNOWN), "VULKAN SPEC ERROR MESSAGE: An unknown error has occurred; either the application has provided invalid input, or an implementation failure has occurred." },
+        { VTK_VK_RESULT_NAME(VK_SUCCESS), "VULKAN SPEC ERROR MESSAGE: Command successfully completed." },
+        { VTK_VK_RESULT_NAME(VK_NOT_READY), "VULKAN SPEC ERROR MESSAGE: A fence or query has not yet completed." },
+        { VTK_VK_RESULT_NAME(VK_TIMEOUT), "VULKAN SPEC ERROR MESSAGE: A wait operation has not completed in the specified time." },
+        { VTK_VK_RESULT_NAME(VK_EVENT_SET), "VULKAN SPEC ERROR MESSAGE: An event is signaled." },
+        { VTK_VK_RESULT_NAME(VK_EVENT_RESET), "VULKAN SPEC ERROR MESSAGE: An event is unsignaled." },
+        { VTK_VK_RESULT_NAME(VK_INCOMPLETE), "VULKAN SPEC ERROR MESSAGE: A return array was too small for the result." },
+        { VTK_VK_RESULT_NAME(VK_SUBOPTIMAL_KHR), "VULKAN SPEC ERROR MESSAGE: A swapchain no longer matches the surface properties exactly, but can still be used to present to the surface successfully." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_OUT_OF_HOST_MEMORY), "VULKAN SPEC ERROR MESSAGE: A host memory allocation has failed." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_OUT_OF_DEVICE_MEMORY), "VULKAN SPEC ERROR MESSAGE: A device memory allocation has failed." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INITIALIZATION_FAILED), "VULKAN SPEC ERROR MESSAGE: Initialization of an object could not be completed for implementation-specific reasons." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_DEVICE_LOST), "VULKAN SPEC ERROR MESSAGE: The logical or physical device has been lost." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_MEMORY_MAP_FAILED), "VULKAN SPEC ERROR MESSAGE: Mapping of a memory object has failed." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_LAYER_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested layer is not present or could not be loaded." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_EXTENSION_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested extension is not supported." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_FEATURE_NOT_PRESENT), "VULKAN SPEC ERROR MESSAGE: A requested feature is not supported." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INCOMPATIBLE_DRIVER), "VULKAN SPEC ERROR MESSAGE: The requested version of Vulkan is not supported by the driver or is otherwise incompatible for implementation-specific reasons." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_TOO_MANY_OBJECTS), "VULKAN SPEC ERROR MESSAGE: Too many objects of the type have already been created." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_FORMAT_NOT_SUPPORTED), "VULKAN SPEC ERROR MESSAGE: A requested format is not supported on this device." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_FRAGMENTED_POOL), "VULKAN SPEC ERROR MESSAGE: A pool allocation has failed due to fragmentation of the pool’s memory. This must only be returned if no attempt to allocate host or device memory was made to accommodate the new allocation. This should be returned in preference to VK_ERROR_OUT_OF_POOL_MEMORY, but only if the implementation is certain that the pool allocation failure was due to fragmentation." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_SURFACE_LOST_KHR), "VULKAN SPEC ERROR MESSAGE: A surface is no longer available." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_NATIVE_WINDOW_IN_USE_KHR), "VULKAN SPEC ERROR MESSAGE: The requested window is already in use by Vulkan or another API in a manner which prevents it from being used again." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_OUT_OF_DATE_KHR), "VULKAN SPEC ERROR MESSAGE: A surface has changed in such a way that it is no longer compatible with the swapchain, and further presentation requests using the swapchain will fail. Applications must query the new surface properties and recreate their swapchain if they wish to continue presenting to the surface." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INCOMPATIBLE_DISPLAY_KHR), "VULKAN SPEC ERROR MESSAGE: The display used by a swapchain does not use the same presentable image layout, or is incompatible in a way that prevents sharing an image." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INVALID_SHADER_NV), "VULKAN SPEC ERROR MESSAGE: One or more shaders failed to compile or link. More details are reported back to the application via https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#VK_EXT_debug_report if enabled." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_OUT_OF_POOL_MEMORY), "VULKAN SPEC ERROR MESSAGE: A pool memory allocation has failed. This must only be returned if no attempt to allocate host or device memory was made to accommodate the new allocation. If the failure was definitely due to fragmentation of the pool, VK_ERROR_FRAGMENTED_POOL should be returned instead." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INVALID_EXTERNAL_HANDLE), "VULKAN SPEC ERROR MESSAGE: An external handle is not a valid handle of the specified type." },
+        // { VTK_VK_RESULT_NAME(VK_ERROR_FRAGMENTATION), "VULKAN SPEC ERROR MESSAGE: A descriptor pool creation has failed due to fragmentation." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_INVALID_DEVICE_ADDRESS_EXT), "VULKAN SPEC ERROR MESSAGE: A buffer creation failed because the requested address is not available." },
+        // { VTK_VK_RESULT_NAME(VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS), "VULKAN SPEC ERROR MESSAGE: A buffer creation or memory allocation failed because the requested address is not available." },
+        { VTK_VK_RESULT_NAME(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT), "VULKAN SPEC ERROR MESSAGE: An operation on a swapchain created with VK_FULL_SCREEN_EXCLUSIVE_APPLICATION_CONTROLLED_EXT failed as it did not have exlusive full-screen access. This may occur due to implementation-dependent reasons, outside of the application’s control." },
+        // { VTK_VK_RESULT_NAME(VK_ERROR_UNKNOWN), "VULKAN SPEC ERROR MESSAGE: An unknown error has occurred; either the application has provided invalid input, or an implementation failure has occurred." },
     };
     vk_result_debug_info *DebugInfo = NULL;
     for(u32 VkResultDebugInfoIndex = 0; VkResultDebugInfoIndex < CTK_ARRAY_COUNT(VK_RESULT_DEBUG_INFOS); ++VkResultDebugInfoIndex)
@@ -183,6 +378,16 @@ AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, name_selector NameSelector,
     b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, NameSelector);
     ctk::Free(&SupportedAddOns);
     return AllSupported;
+}
+
+static void
+ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
+{
+    if(Result != VK_SUCCESS)
+    {
+        OutputVkResult(Result, FunctionName);
+        CTK_FATAL(FailureMessage)
+    }
 }
 
 template<u32 size>
@@ -300,6 +505,18 @@ CreateFence(VkDevice LogicalDevice)
     return Fence;
 }
 
+static void
+AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
+{
+    VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
+    CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    CommandBufferAllocateInfo.commandPool = CommandPool;
+    CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    CommandBufferAllocateInfo.commandBufferCount = Count;
+    ValidateVkResult(vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers),
+                     "vkAllocateCommandBuffers", "failed to allocate command buffer");
+}
+
 static VkCommandBuffer
 BeginOneTimeCommandBuffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
 {
@@ -335,7 +552,7 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
-instance
+static instance
 CreateInstance(instance_config *Config)
 {
     instance Instance = {};
@@ -379,7 +596,7 @@ CreateInstance(instance_config *Config)
         Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
         // Create Debug Utils Messenger
-        LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
+        VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
         ValidateVkResult(vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
                                                         &Instance.DebugUtilsMessenger),
                          "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
@@ -391,7 +608,7 @@ CreateInstance(instance_config *Config)
     return Instance;
 }
 
-device
+static device
 CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *Config)
 {
     device Device = {};
@@ -466,7 +683,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         ////////////////////////////////////////////////////////////
 
         // Check if device has requested features.
-        #define _VTK_DEVICE_FEATURE_CHECK(FEATURE) \
+        #define VTK_INTERNAL_DEVICE_FEATURE_CHECK(FEATURE) \
             if(Config->Features.FEATURE && !SelectedDeviceInfo.Features.FEATURE) \
             { \
                 DeviceFeaturesSupported = false; \
@@ -474,61 +691,61 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
             }
 
         b32 DeviceFeaturesSupported = true;
-        _VTK_DEVICE_FEATURE_CHECK(robustBufferAccess)
-        _VTK_DEVICE_FEATURE_CHECK(fullDrawIndexUint32)
-        _VTK_DEVICE_FEATURE_CHECK(imageCubeArray)
-        _VTK_DEVICE_FEATURE_CHECK(independentBlend)
-        _VTK_DEVICE_FEATURE_CHECK(geometryShader)
-        _VTK_DEVICE_FEATURE_CHECK(tessellationShader)
-        _VTK_DEVICE_FEATURE_CHECK(sampleRateShading)
-        _VTK_DEVICE_FEATURE_CHECK(dualSrcBlend)
-        _VTK_DEVICE_FEATURE_CHECK(logicOp)
-        _VTK_DEVICE_FEATURE_CHECK(multiDrawIndirect)
-        _VTK_DEVICE_FEATURE_CHECK(drawIndirectFirstInstance)
-        _VTK_DEVICE_FEATURE_CHECK(depthClamp)
-        _VTK_DEVICE_FEATURE_CHECK(depthBiasClamp)
-        _VTK_DEVICE_FEATURE_CHECK(fillModeNonSolid)
-        _VTK_DEVICE_FEATURE_CHECK(depthBounds)
-        _VTK_DEVICE_FEATURE_CHECK(wideLines)
-        _VTK_DEVICE_FEATURE_CHECK(largePoints)
-        _VTK_DEVICE_FEATURE_CHECK(alphaToOne)
-        _VTK_DEVICE_FEATURE_CHECK(multiViewport)
-        _VTK_DEVICE_FEATURE_CHECK(samplerAnisotropy)
-        _VTK_DEVICE_FEATURE_CHECK(textureCompressionETC2)
-        _VTK_DEVICE_FEATURE_CHECK(textureCompressionASTC_LDR)
-        _VTK_DEVICE_FEATURE_CHECK(textureCompressionBC)
-        _VTK_DEVICE_FEATURE_CHECK(occlusionQueryPrecise)
-        _VTK_DEVICE_FEATURE_CHECK(pipelineStatisticsQuery)
-        _VTK_DEVICE_FEATURE_CHECK(vertexPipelineStoresAndAtomics)
-        _VTK_DEVICE_FEATURE_CHECK(fragmentStoresAndAtomics)
-        _VTK_DEVICE_FEATURE_CHECK(shaderTessellationAndGeometryPointSize)
-        _VTK_DEVICE_FEATURE_CHECK(shaderImageGatherExtended)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageExtendedFormats)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageMultisample)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageReadWithoutFormat)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageWriteWithoutFormat)
-        _VTK_DEVICE_FEATURE_CHECK(shaderUniformBufferArrayDynamicIndexing)
-        _VTK_DEVICE_FEATURE_CHECK(shaderSampledImageArrayDynamicIndexing)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageBufferArrayDynamicIndexing)
-        _VTK_DEVICE_FEATURE_CHECK(shaderStorageImageArrayDynamicIndexing)
-        _VTK_DEVICE_FEATURE_CHECK(shaderClipDistance)
-        _VTK_DEVICE_FEATURE_CHECK(shaderCullDistance)
-        _VTK_DEVICE_FEATURE_CHECK(shaderFloat64)
-        _VTK_DEVICE_FEATURE_CHECK(shaderInt64)
-        _VTK_DEVICE_FEATURE_CHECK(shaderInt16)
-        _VTK_DEVICE_FEATURE_CHECK(shaderResourceResidency)
-        _VTK_DEVICE_FEATURE_CHECK(shaderResourceMinLod)
-        _VTK_DEVICE_FEATURE_CHECK(sparseBinding)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyBuffer)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyImage2D)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyImage3D)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidency2Samples)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidency4Samples)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidency8Samples)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidency16Samples)
-        _VTK_DEVICE_FEATURE_CHECK(sparseResidencyAliased)
-        _VTK_DEVICE_FEATURE_CHECK(variableMultisampleRate)
-        _VTK_DEVICE_FEATURE_CHECK(inheritedQueries)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(robustBufferAccess)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(fullDrawIndexUint32)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(imageCubeArray)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(independentBlend)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(geometryShader)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(tessellationShader)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sampleRateShading)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(dualSrcBlend)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(logicOp)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(multiDrawIndirect)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(drawIndirectFirstInstance)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(depthClamp)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(depthBiasClamp)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(fillModeNonSolid)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(depthBounds)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(wideLines)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(largePoints)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(alphaToOne)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(multiViewport)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(samplerAnisotropy)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(textureCompressionETC2)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(textureCompressionASTC_LDR)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(textureCompressionBC)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(occlusionQueryPrecise)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(pipelineStatisticsQuery)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(vertexPipelineStoresAndAtomics)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(fragmentStoresAndAtomics)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderTessellationAndGeometryPointSize)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderImageGatherExtended)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageImageExtendedFormats)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageImageMultisample)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageImageReadWithoutFormat)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageImageWriteWithoutFormat)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderUniformBufferArrayDynamicIndexing)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderSampledImageArrayDynamicIndexing)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageBufferArrayDynamicIndexing)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderStorageImageArrayDynamicIndexing)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderClipDistance)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderCullDistance)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderFloat64)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderInt64)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderInt16)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderResourceResidency)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(shaderResourceMinLod)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseBinding)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidencyBuffer)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidencyImage2D)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidencyImage3D)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidency2Samples)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidency4Samples)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidency8Samples)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidency16Samples)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(sparseResidencyAliased)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(variableMultisampleRate)
+        VTK_INTERNAL_DEVICE_FEATURE_CHECK(inheritedQueries)
 
         // Check if physical device meets other requirements.
         b32 SwapchainsSupported = SelectedDeviceInfo.SurfaceFormats.Count != 0 &&
@@ -596,7 +813,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     return Device;
 }
 
-swapchain
+static swapchain
 CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
 {
     swapchain Swapchain = {};
@@ -706,7 +923,7 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     return Swapchain;
 }
 
-VkCommandPool
+static VkCommandPool
 CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
 {
     VkCommandPoolCreateInfo CommandPoolCreateInfo = {};
@@ -719,7 +936,7 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
     return CommandPool;
 }
 
-buffer
+static buffer
 CreateBuffer(device *Device, buffer_config *Config)
 {
     buffer Buffer = {};
@@ -752,14 +969,14 @@ CreateBuffer(device *Device, buffer_config *Config)
     return Buffer;
 }
 
-void
+static void
 DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 {
     vkDestroyBuffer(LogicalDevice, Buffer->Handle, NULL);
     vkFreeMemory(LogicalDevice, Buffer->Memory, NULL);
 }
 
-region
+static region
 AllocateRegion(buffer *Buffer, VkDeviceSize Size)
 {
     if(Buffer->End + Size >= Buffer->Size)
@@ -774,7 +991,7 @@ AllocateRegion(buffer *Buffer, VkDeviceSize Size)
     return Region;
 }
 
-image
+static image
 CreateImage(device *Device, image_config *Config)
 {
     image Image = {};
@@ -851,7 +1068,7 @@ CreateImage(device *Device, image_config *Config)
     return Image;
 }
 
-render_pass
+static render_pass
 CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
 {
     render_pass RenderPass = {};
@@ -916,7 +1133,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     return RenderPass;
 }
 
-VkFramebuffer
+static VkFramebuffer
 CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_config *Config)
 {
     VkFramebufferCreateInfo FramebufferCreateInfo = {};
@@ -933,19 +1150,7 @@ CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_c
     return Framebuffer;
 }
 
-void
-AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
-{
-    VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
-    CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    CommandBufferAllocateInfo.commandPool = CommandPool;
-    CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    CommandBufferAllocateInfo.commandBufferCount = Count;
-    ValidateVkResult(vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers),
-                     "vkAllocateCommandBuffers", "failed to allocate command buffer");
-}
-
-shader_module
+static shader_module
 CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit)
 {
     shader_module ShaderModule = {};
@@ -966,7 +1171,7 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     return ShaderModule;
 }
 
-u32
+static u32
 PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
 {
     static VkFormat FORMATS[] =
@@ -984,7 +1189,7 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     return AttributeIndex;
 }
 
-VkDescriptorPool
+static VkDescriptorPool
 CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
 {
     VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
@@ -999,7 +1204,7 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
     return DescriptorPool;
 }
 
-VkDescriptorSetLayout
+static VkDescriptorSetLayout
 CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLayoutBinding, 4> *DescriptorSetLayoutBindings)
 {
     VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo = {};
@@ -1012,7 +1217,7 @@ CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLay
     return DescriptorSetLayout;
 }
 
-void
+static void
 AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, ctk::sarray<VkDescriptorSetLayout, 4> *DescriptorSetLayouts,
                        ctk::sarray<VkDescriptorSet, 4> *DescriptorSets)
 {
@@ -1026,7 +1231,7 @@ AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, 
     DescriptorSets->Count = DescriptorSetLayouts->Count;
 }
 
-graphics_pipeline
+static graphics_pipeline
 CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_config *Config)
 {
     graphics_pipeline GraphicsPipeline = {};
@@ -1218,7 +1423,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     return GraphicsPipeline;
 }
 
-frame_state
+static frame_state
 CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount)
 {
     frame_state FrameState = {};
@@ -1236,7 +1441,7 @@ CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount
     return FrameState;
 }
 
-void
+static void
 WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
     if(OffsetIntoRegion + Size > Region->Size)
@@ -1250,7 +1455,7 @@ WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSi
     vkUnmapMemory(LogicalDevice, Region->Buffer->Memory);
 }
 
-void
+static void
 WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
                    void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
@@ -1269,7 +1474,7 @@ WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRe
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
 }
 
-VkFormat
+static VkFormat
 FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
 {
     static const VkFormat DEPTH_IMAGE_FORMATS[] =
@@ -1292,7 +1497,7 @@ FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
     CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
 }
 
-void
+static void
 TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout)
 {
     // Calculate source/destination access mask and pipeline stage mask.
@@ -1373,16 +1578,6 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
                              1, // Image Memory Count
                              &ImageMemoryBarrier); // Image Memory Barriers
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
-}
-
-void
-ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
-{
-    if(Result != VK_SUCCESS)
-    {
-        OutputVkResult(Result, FunctionName);
-        CTK_FATAL(FailureMessage)
-    }
 }
 
 } // vtk
