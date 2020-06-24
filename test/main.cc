@@ -123,21 +123,30 @@ main()
     /// Data
     ////////////////////////////////////////////////////////////
 
-    // Buffers
-    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(vertex) * 3,
-                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4) * 2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
     // Vertex Data
     vertex Vertexes[] =
     {
-        { {  0.75f,  0.75f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-        { {  0.0f,  -0.75f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { -0.75f,  0.75f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+        { { 1.0f,  0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+        { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+        { { 0.0f, -1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+        { { 0.0f,  0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
     };
-    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
+    u32 Indexes[] = { 0, 1, 2, 0, 2, 3 };
+
+    // Buffers
+    vtk::buffer StagingBuffer = vtk::CreateBuffer(&Device, 1000000, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vtk::buffer VertexBuffer = vtk::CreateBuffer(&Device, sizeof(Vertexes),
+                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vtk::buffer IndexBuffer = vtk::CreateBuffer(&Device, sizeof(Indexes),
+                                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vtk::buffer MVPMatrixBuffer = vtk::CreateBuffer(&Device, sizeof(glm::mat4) * 2, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &StagingBuffer, &VertexBuffer, Vertexes, sizeof(Vertexes), 0);
+    vtk::WriteToDeviceLocalBuffer(&Device, GraphicsCommandPool, &StagingBuffer, &IndexBuffer, Indexes, sizeof(Indexes), 0);
 
     ////////////////////////////////////////////////////////////
     /// Depth Image
@@ -323,6 +332,10 @@ main()
                                1, // Binding Count
                                VertexBuffers,
                                VertexBufferOffsets);
+        vkCmdBindIndexBuffer(CommandBuffer,
+                             IndexBuffer.Handle,
+                             0, // Offset
+                             VK_INDEX_TYPE_UINT32);
         for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
         {
             u32 DynamicOffsets[1] = { EntityIndex * sizeof(glm::mat4) };
@@ -334,11 +347,12 @@ main()
                                     DescriptorSets.Data, // Sets to be bound to [first .. first + count]
                                     CTK_ARRAY_COUNT(DynamicOffsets), // Dynamic Offset Count
                                     DynamicOffsets); // Dynamic Offsets
-            vkCmdDraw(CommandBuffer,
-                      CTK_ARRAY_COUNT(Vertexes),
-                      1, // Instance Count (instanced rendering only)
-                      0, // First Vertex
-                      0); // First instance index (instanced rendering only)
+            vkCmdDrawIndexed(CommandBuffer,
+                             CTK_ARRAY_COUNT(Indexes),
+                             1, // Instance Count (instanced rendering only)
+                             0, // First Index
+                             0, // Vertex Offset
+                             0); // First instance index (instanced rendering only)
         }
 
         // End

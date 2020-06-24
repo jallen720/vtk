@@ -273,7 +273,8 @@ WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, Vk
 
 VTK_API
 void
-WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset);
+WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *StagingBuffer, buffer *Buffer,
+                         void *Data, VkDeviceSize Size, VkDeviceSize Offset);
 
 VTK_API
 VkFormat

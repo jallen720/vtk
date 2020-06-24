@@ -763,6 +763,7 @@ CreateBuffer(device *Device, u32 Size, VkBufferUsageFlags UsageFlags, VkMemoryPr
     // custom allocator that splits up a single allocation among many different objects by using the offset parameters
     // that we've seen in many functions.
     {
+        ctk::Info("buffer mem-type index: %u", MemoryAllocateInfo.memoryTypeIndex);
         VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory);
         ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for buffer");
     }
@@ -828,6 +829,7 @@ CreateImage(device *Device, image_config *Config)
     MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
                                                              Config->MemoryPropertyFlags);
     {
+        ctk::Info("image mem-type index: %u", MemoryAllocateInfo.memoryTypeIndex);
         VkResult Result = vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory);
         ValidateVkResult(Result, "vkAllocateMemory", "failed to allocate memory for image");
     }
@@ -1278,25 +1280,19 @@ WriteToHostCoherentBuffer(VkDevice LogicalDevice, buffer *Buffer, void *Data, Vk
 }
 
 void
-WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *Buffer, void *Data, VkDeviceSize Size, VkDeviceSize Offset)
+WriteToDeviceLocalBuffer(device *Device, VkCommandPool CommandPool, buffer *StagingBuffer, buffer *Buffer,
+                         void *Data, VkDeviceSize Size, VkDeviceSize Offset)
 {
-    // Create host-visible source buffer flagged as transfer source and write data to it.
-    buffer SourceBuffer = CreateBuffer(Device, Size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    WriteToHostCoherentBuffer(Device->Logical, &SourceBuffer, Data, Size, Offset);
+    WriteToHostCoherentBuffer(Device->Logical, StagingBuffer, Data, Size, Offset);
 
-    // Copy source buffer data to destination buffer using queue.
     VkBufferCopy BufferCopy = {};
     BufferCopy.srcOffset = 0;
     BufferCopy.dstOffset = 0;
     BufferCopy.size = Size;
 
     VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
-        vkCmdCopyBuffer(CommandBuffer, SourceBuffer.Handle, Buffer->Handle, 1, &BufferCopy);
+        vkCmdCopyBuffer(CommandBuffer, StagingBuffer->Handle, Buffer->Handle, 1, &BufferCopy);
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
-
-    // Cleanup
-    DestroyBuffer(Device->Logical, &SourceBuffer);
 }
 
 VkFormat
