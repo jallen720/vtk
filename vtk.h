@@ -115,7 +115,6 @@ struct image
     VkDeviceSize Height;
     VkFormat Format;
     VkImageView View;
-    VkSampler Sampler;
 };
 
 struct attachment
@@ -1067,28 +1066,29 @@ CreateImage(device *Device, image_config *Config)
     ////////////////////////////////////////////////////////////
     Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, Config->AspectMask);
 
-    ////////////////////////////////////////////////////////////
-    /// Sampler
-    ////////////////////////////////////////////////////////////
-    VkSamplerCreateInfo SamplerCreateInfo = {};
-    SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    SamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
-    SamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
-    SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.anisotropyEnable = VK_TRUE;
-    SamplerCreateInfo.maxAnisotropy = 16;
-    SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-    SamplerCreateInfo.compareEnable = VK_FALSE;
-    SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    SamplerCreateInfo.mipLodBias = 0.0f;
-    SamplerCreateInfo.minLod = 0.0f;
-    SamplerCreateInfo.maxLod = 0.0f;
-    ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler),
-                     "vkCreateSampler", "failed to create sampler");
+    ctk::Todo("move sampler code to graphics api");
+    // ////////////////////////////////////////////////////////////
+    // /// Sampler
+    // ////////////////////////////////////////////////////////////
+    // VkSamplerCreateInfo SamplerCreateInfo = {};
+    // SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    // SamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
+    // SamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
+    // SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // SamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    // SamplerCreateInfo.maxAnisotropy = 16;
+    // SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    // SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    // SamplerCreateInfo.compareEnable = VK_FALSE;
+    // SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    // SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    // SamplerCreateInfo.mipLodBias = 0.0f;
+    // SamplerCreateInfo.minLod = 0.0f;
+    // SamplerCreateInfo.maxLod = 0.0f;
+    // ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler),
+    //                  "vkCreateSampler", "failed to create sampler");
 
     return Image;
 }
