@@ -467,21 +467,6 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
     return ImageView;
 }
 
-static u32
-FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties *MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
-{
-    for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < MemoryProperties->memoryTypeCount; ++MemoryTypeIndex)
-    {
-        // Check if memory at index has correct type and properties.
-        if((MemoryTypeBits & (1 << MemoryTypeIndex)) &&
-           (MemoryProperties->memoryTypes[MemoryTypeIndex].propertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
-        {
-            return MemoryTypeIndex;
-        }
-    }
-    CTK_FATAL("failed to find memory type index")
-}
-
 static VkSemaphore
 CreateSemaphore(VkDevice LogicalDevice)
 {
@@ -936,6 +921,59 @@ CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
     return CommandPool;
 }
 
+static VkDeviceMemory
+AllocateDeviceMemory(device *Device, VkMemoryRequirements *MemoryRequirements, VkMemoryPropertyFlags MemoryPropertyFlags)
+{
+    // Find memory type index from device based on memory property flags.
+    u32 SelectedMemoryTypeIndex = VTK_UNSET_INDEX;
+    for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < Device->MemoryProperties.memoryTypeCount; ++MemoryTypeIndex)
+    {
+        // Ensure index refers to memory type form memory requirements.
+        if(!(MemoryRequirements->memoryTypeBits & (1 << MemoryTypeIndex)))
+        {
+            continue;
+        }
+        // Check if memory at index has correct properties.
+        else if((Device->MemoryProperties.memoryTypes[MemoryTypeIndex].propertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
+        {
+            SelectedMemoryTypeIndex = MemoryTypeIndex;
+            break;
+        }
+    }
+    if(SelectedMemoryTypeIndex == VTK_UNSET_INDEX)
+    {
+        CTK_FATAL("failed to find memory type that satisfies property requirements")
+    }
+
+    // Allocate memory
+    VkMemoryAllocateInfo MemoryAllocateInfo = {};
+    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    MemoryAllocateInfo.allocationSize = MemoryRequirements->size;
+    MemoryAllocateInfo.memoryTypeIndex = SelectedMemoryTypeIndex;
+    VkDeviceMemory Memory = VK_NULL_HANDLE;
+    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Memory),
+                     "vkAllocateMemory", "failed to allocate memory");
+
+    return Memory;
+}
+
+// // DEPRECATED
+// static u32
+// FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties *MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
+// {
+//     for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < MemoryProperties->memoryTypeCount; ++MemoryTypeIndex)
+//     {
+//         VkMemoryPropertyFlags MemoryTypePropertyFlags = MemoryProperties->memoryTypes[MemoryTypeIndex].propertyFlags;
+
+//         // Check if memory at index has correct type and properties.
+//         if((MemoryTypeBits & (1 << MemoryTypeIndex)) && (MemoryTypePropertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
+//         {
+//             return MemoryTypeIndex;
+//         }
+//     }
+//     CTK_FATAL("failed to find memory type index")
+// }
+
 static buffer
 CreateBuffer(device *Device, buffer_config *Config)
 {
@@ -956,13 +994,7 @@ CreateBuffer(device *Device, buffer_config *Config)
     // Memory Allocation & Binding
     VkMemoryRequirements MemoryRequirements = {};
     vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
-    VkMemoryAllocateInfo MemoryAllocateInfo = {};
-    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-    MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
-                                                             Config->MemoryPropertyFlags);
-    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Buffer.Memory),
-                     "vkAllocateMemory", "failed to allocate memory for buffer");
+    Buffer.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, Config->MemoryPropertyFlags);
     ValidateVkResult(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
                      "vkBindBufferMemory", "failed to bind buffer memory");
 
@@ -1026,14 +1058,7 @@ CreateImage(device *Device, image_config *Config)
     ////////////////////////////////////////////////////////////
     VkMemoryRequirements MemoryRequirements = {};
     vkGetImageMemoryRequirements(Device->Logical, Image.Handle, &MemoryRequirements);
-
-    VkMemoryAllocateInfo MemoryAllocateInfo = {};
-    MemoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    MemoryAllocateInfo.allocationSize = MemoryRequirements.size;
-    MemoryAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(&Device->MemoryProperties, MemoryRequirements.memoryTypeBits,
-                                                             Config->MemoryPropertyFlags);
-    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Image.Memory),
-                     "vkAllocateMemory", "failed to allocate memory for image");
+    Image.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, Config->MemoryPropertyFlags);
     ValidateVkResult(vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0),
                      "vkBindImageMemory", "failed to bind image memory");
 
