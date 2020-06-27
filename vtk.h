@@ -1010,9 +1010,10 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 static region
 AllocateRegion(buffer *Buffer, VkDeviceSize Size)
 {
-    if(Buffer->End + Size >= Buffer->Size)
+    if(Buffer->End + Size > Buffer->Size)
     {
-        CTK_FATAL("buffer (size=%u end=%u) does not have room to allocate region of size %u", Buffer->Size, Buffer->End, Size);
+        CTK_FATAL("buffer (size=%u end=%u) cannot allocate region of size %u (only %u bytes left)",
+                  Buffer->Size, Buffer->End, Size, Buffer->Size - Buffer->End);
     }
     region Region = {};
     Region.Buffer = Buffer;
@@ -1065,30 +1066,6 @@ CreateImage(device *Device, image_config *Config)
     /// View
     ////////////////////////////////////////////////////////////
     Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, Config->AspectMask);
-
-    ctk::Todo("move sampler code to graphics api");
-    // ////////////////////////////////////////////////////////////
-    // /// Sampler
-    // ////////////////////////////////////////////////////////////
-    // VkSamplerCreateInfo SamplerCreateInfo = {};
-    // SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    // SamplerCreateInfo.magFilter = VK_FILTER_LINEAR;
-    // SamplerCreateInfo.minFilter = VK_FILTER_LINEAR;
-    // SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    // SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    // SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    // SamplerCreateInfo.anisotropyEnable = VK_TRUE;
-    // SamplerCreateInfo.maxAnisotropy = 16;
-    // SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    // SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-    // SamplerCreateInfo.compareEnable = VK_FALSE;
-    // SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    // SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    // SamplerCreateInfo.mipLodBias = 0.0f;
-    // SamplerCreateInfo.minLod = 0.0f;
-    // SamplerCreateInfo.maxLod = 0.0f;
-    // ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Image.Sampler),
-    //                  "vkCreateSampler", "failed to create sampler");
 
     return Image;
 }
@@ -1603,6 +1580,111 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
                              1, // Image Memory Count
                              &ImageMemoryBarrier); // Image Memory Barriers
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+}
+
+static VkDescriptorType
+GetVkDescriptorType(cstr Name)
+{
+    static ctk::pair<cstr, VkDescriptorType> DESCRIPTOR_TYPES[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_SAMPLER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT),
+        // CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR),
+        CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV),
+    };
+    auto DescriptorType = FindPair(DESCRIPTOR_TYPES, CTK_ARRAY_COUNT(DESCRIPTOR_TYPES), Name);
+    if(!DescriptorType)
+    {
+        CTK_FATAL("failed to find VkDescriptorType type for \"%s\"", Name)
+    }
+    return DescriptorType->Value;
+}
+
+static VkShaderStageFlagBits
+GetVkShaderStageFlagBits(cstr Name)
+{
+    static ctk::pair<cstr, VkShaderStageFlagBits> SHADER_STAGES[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_VERTEX_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_GEOMETRY_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_FRAGMENT_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_COMPUTE_BIT),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_ALL_GRAPHICS),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_ALL),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_RAYGEN_BIT_KHR),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_ANY_HIT_BIT_KHR),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_MISS_BIT_KHR),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_INTERSECTION_BIT_KHR),
+        // CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CALLABLE_BIT_KHR),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_TASK_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_MESH_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_RAYGEN_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_ANY_HIT_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_MISS_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_INTERSECTION_BIT_NV),
+        CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CALLABLE_BIT_NV),
+    };
+    auto ShaderStage = FindPair(SHADER_STAGES, CTK_ARRAY_COUNT(SHADER_STAGES), Name);
+    if(!ShaderStage)
+    {
+        CTK_FATAL("failed to find VkShaderStageFlagBits for \"%s\"", Name)
+    }
+    return ShaderStage->Value;
+}
+
+static VkBool32
+GetVkBool32(cstr Name)
+{
+    static ctk::pair<cstr, VkBool32> BOOLS[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_TRUE),
+        CTK_VALUE_NAME_PAIR(VK_FALSE),
+    };
+    auto VkBool = FindPair(BOOLS, CTK_ARRAY_COUNT(BOOLS), Name);
+    if(!VkBool)
+    {
+        CTK_FATAL("failed to find VkBool32 for \"%s\"", Name)
+    }
+    return VkBool->Value;
+}
+
+static VkPrimitiveTopology
+GetVkPrimitiveTopology(cstr Name)
+{
+    static ctk::pair<cstr, VkPrimitiveTopology> PRIMITIVE_TOPOLOGIES[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_POINT_LIST),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_LINE_LIST),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY),
+        CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST),
+    };
+    auto PrimitiveTopology = FindPair(PRIMITIVE_TOPOLOGIES, CTK_ARRAY_COUNT(PRIMITIVE_TOPOLOGIES), Name);
+    if(!PrimitiveTopology)
+    {
+        CTK_FATAL("failed to find VkPrimitiveTopology for \"%s\"", Name)
+    }
+    return PrimitiveTopology->Value;
 }
 
 } // vtk
