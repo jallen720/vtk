@@ -94,6 +94,8 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
+    VkDeviceSize ElementCount;
+    VkDeviceSize ElementSize;
 };
 
 struct image_config
@@ -1008,18 +1010,21 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 }
 
 static region
-AllocateRegion(buffer *Buffer, VkDeviceSize Size)
+AllocateRegion(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize)
 {
-    if(Buffer->End + Size > Buffer->Size)
+    VkDeviceSize RegionSize = ElementCount * ElementSize;
+    if(Buffer->End + RegionSize > Buffer->Size)
     {
         CTK_FATAL("buffer (size=%u end=%u) cannot allocate region of size %u (only %u bytes left)",
-                  Buffer->Size, Buffer->End, Size, Buffer->Size - Buffer->End);
+                  Buffer->Size, Buffer->End, RegionSize, Buffer->Size - Buffer->End);
     }
     region Region = {};
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
-    Region.Size = Size;
-    Buffer->End += Size;
+    Region.Size = RegionSize;
+    Region.ElementCount = ElementCount;
+    Region.ElementSize = ElementSize;
+    Buffer->End += RegionSize;
     return Region;
 }
 

@@ -152,10 +152,10 @@ main()
     vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
 
     // Regions
-    vtk::region MVPMatrixRegion = vtk::AllocateRegion(&HostBuffer, sizeof(glm::mat4) * 2);
-    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, MEGABYTE);
-    vtk::region VertexRegion = vtk::AllocateRegion(&DeviceBuffer, sizeof(Vertexes));
-    vtk::region IndexRegion = vtk::AllocateRegion(&DeviceBuffer, sizeof(Indexes));
+    vtk::region MVPMatrixRegion = vtk::AllocateRegion(&HostBuffer, 2, sizeof(glm::mat4));
+    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 1, MEGABYTE);
+    vtk::region VertexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Vertexes));
+    vtk::region IndexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Indexes));
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &VertexRegion, Vertexes, sizeof(Vertexes), 0);
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &IndexRegion, Indexes, sizeof(Indexes), 0);
 
