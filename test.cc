@@ -36,6 +36,22 @@ struct vertex
     ctk::vec4<f32> Color;
 };
 
+enum
+{
+    UNIFORM_BUFFER_TYPE_SINGLE,
+    UNIFORM_BUFFER_TYPE_PER_FRAME,
+};
+
+struct uniform_buffer
+{
+    union
+    {
+        region *Region;
+        ctk::sarray<region *, 4> FrameRegions;
+    };
+    s32 Type;
+};
+
 ////////////////////////////////////////////////////////////
 /// Internal
 ////////////////////////////////////////////////////////////

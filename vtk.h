@@ -94,7 +94,7 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
-    VkDeviceSize ElementCount;
+    // VkDeviceSize ElementCount;
     VkDeviceSize ElementSize;
 };
 
@@ -1022,7 +1022,7 @@ AllocateRegion(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSi
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
     Region.Size = RegionSize;
-    Region.ElementCount = ElementCount;
+    // Region.ElementCount = ElementCount;
     Region.ElementSize = ElementSize;
     Buffer->End += RegionSize;
     return Region;
