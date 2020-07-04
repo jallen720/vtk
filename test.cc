@@ -36,22 +36,6 @@ struct vertex
     ctk::vec4<f32> Color;
 };
 
-enum
-{
-    UNIFORM_BUFFER_TYPE_SINGLE,
-    UNIFORM_BUFFER_TYPE_PER_FRAME,
-};
-
-struct uniform_buffer
-{
-    union
-    {
-        region *Region;
-        ctk::sarray<region *, 4> FrameRegions;
-    };
-    s32 Type;
-};
-
 ////////////////////////////////////////////////////////////
 /// Internal
 ////////////////////////////////////////////////////////////
@@ -180,6 +164,9 @@ main()
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &VertexRegion, Vertexes, sizeof(Vertexes), 0);
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &IndexRegion, Indexes, sizeof(Indexes), 0);
 
+    // Uniform Buffers
+    vtk::uniform_buffer MVPMatrixUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(glm::mat4), Swapchain.Images.Count);
+
     ////////////////////////////////////////////////////////////
     /// Depth Image
     ////////////////////////////////////////////////////////////
@@ -274,22 +261,37 @@ main()
     /// Descriptor Sets
     ////////////////////////////////////////////////////////////
 
+    // Descriptor Infos
+    vtk::descriptor_info MVPMatrixUniformBufferDescriptorInfo = {};
+    MVPMatrixUniformBufferDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    MVPMatrixUniformBufferDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    MVPMatrixUniformBufferDescriptorInfo.Count = 1;
+    MVPMatrixUniformBufferDescriptorInfo.UniformBuffer = &MVPMatrixUniformBuffer;
+
+    // Descriptor Set Info
+    ctk::sarray<vtk::descriptor_set_info, 4> DescriptorSetInfos = {};
+    vtk::descriptor_set_info *DescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    DescriptorSetInfo->InstanceCount = Swapchain.Images.Count;
+    ctk::Push(&DescriptorSetInfo->DescriptorBindings, { 0, &MVPMatrixUniformBufferDescriptorInfo });
+
     // Pool
-    vtk::descriptor_pool_config DescriptorPoolConfig = {};
-    ctk::Push(&DescriptorPoolConfig.Sizes, { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1 });
-    DescriptorPoolConfig.MaxSets = 3;
-    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, &DescriptorPoolConfig);
+    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, DescriptorSetInfos.Data, DescriptorSetInfos.Count);
 
-    // Layouts
-    ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
-    ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT });
+    // Allocate descriptor sets from pool.
+    ctk::sarray<vtk::descriptor_set, 4> DescriptorSets = {};
+    DescriptorSets.Count = DescriptorSetInfos.Count;
+    vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Data, DescriptorSetInfos.Count, DescriptorSets.Data);
 
-    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
-    ctk::Push(&DescriptorSetLayouts, vtk::CreateDescriptorSetLayout(Device.Logical, &DescriptorSetLayoutBindings));
+    // // Layouts
+    // ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
+    // ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT });
 
-    // Allocation
-    ctk::sarray<VkDescriptorSet, 4> DescriptorSets = {};
-    vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, &DescriptorSetLayouts, &DescriptorSets);
+    // ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
+    // ctk::Push(&DescriptorSetLayouts, vtk::CreateDescriptorSetLayout(Device.Logical, &DescriptorSetLayoutBindings));
+
+    // // Allocation
+    // ctk::sarray<VkDescriptorSet, 4> DescriptorSets = {};
+    // vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, &DescriptorSetLayouts, &DescriptorSets);
 
     // Updates
     VkDescriptorBufferInfo DescriptorBufferInfo = {};
@@ -297,16 +299,20 @@ main()
     DescriptorBufferInfo.offset = MVPMatrixRegion.Offset;
     DescriptorBufferInfo.range = MVPMatrixRegion.Size;
 
-    VkWriteDescriptorSet WriteDescriptorSets[1] = {};
-    WriteDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    WriteDescriptorSets[0].dstSet = DescriptorSets[0];
-    WriteDescriptorSets[0].dstBinding = 0;
-    WriteDescriptorSets[0].dstArrayElement = 0;
-    WriteDescriptorSets[0].descriptorCount = 1;
-    WriteDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    WriteDescriptorSets[0].pBufferInfo = &DescriptorBufferInfo;
+    ctk::sarray<VkWriteDescriptorSet, 4> WriteDescriptorSets = {};
+    for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSets[0].Instances.Count; ++InstanceIndex)
+    {
+        VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
+        WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        WriteDescriptorSet->dstSet = DescriptorSets[0].Instances[InstanceIndex];
+        WriteDescriptorSet->dstBinding = 0;
+        WriteDescriptorSet->dstArrayElement = 0;
+        WriteDescriptorSet->descriptorCount = 1;
+        WriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        WriteDescriptorSet->pBufferInfo = &DescriptorBufferInfo;
+    }
 
-    vkUpdateDescriptorSets(Device.Logical, CTK_ARRAY_COUNT(WriteDescriptorSets), WriteDescriptorSets, 0, NULL);
+    vkUpdateDescriptorSets(Device.Logical, WriteDescriptorSets.Count, WriteDescriptorSets.Data, 0, NULL);
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
@@ -316,8 +322,8 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
+    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[0].Layout);
     GraphicsPipelineConfig.VertexLayout = &VertexLayout;
-    GraphicsPipelineConfig.DescriptorSetLayouts = DescriptorSetLayouts;
     GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsPipelineConfig.DepthTesting = VK_TRUE;
@@ -372,8 +378,8 @@ main()
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     GraphicsPipeline.Layout,
                                     0, // First Set Number
-                                    DescriptorSets.Count,
-                                    DescriptorSets.Data, // Sets to be bound to [first .. first + count]
+                                    1,
+                                    &DescriptorSets[0].Instances[FrameIndex], // Sets to be bound to [first .. first + count]
                                     CTK_ARRAY_COUNT(DynamicOffsets), // Dynamic Offset Count
                                     DynamicOffsets); // Dynamic Offsets
             vkCmdDrawIndexed(CommandBuffer,

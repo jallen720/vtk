@@ -233,6 +233,37 @@ struct device_info
     queue_family_indexes QueueFamilyIndexes;
 };
 
+struct uniform_buffer
+{
+    ctk::sarray<region, 4> Regions;
+};
+
+struct descriptor_info
+{
+    VkDescriptorType Type;
+    VkShaderStageFlags ShaderStageFlags;
+    u32 Count;
+    uniform_buffer* UniformBuffer;
+};
+
+struct descriptor_binding
+{
+    u32 Index;
+    descriptor_info *Info;
+};
+
+struct descriptor_set_info
+{
+    ctk::sarray<descriptor_binding, 4> DescriptorBindings;
+    u32 InstanceCount;
+};
+
+struct descriptor_set
+{
+    ctk::sarray<VkDescriptorSet, 4> Instances;
+    VkDescriptorSetLayout Layout;
+};
+
 ////////////////////////////////////////////////////////////
 /// Internal
 ////////////////////////////////////////////////////////////
@@ -1196,46 +1227,24 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     return AttributeIndex;
 }
 
-static VkDescriptorPool
-CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
-{
-    VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
-    DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    DescriptorPoolCreateInfo.flags = 0;
-    DescriptorPoolCreateInfo.maxSets = Config->MaxSets;
-    DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
-    DescriptorPoolCreateInfo.pPoolSizes = Config->Sizes.Data;
-    VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
-                     "vkCreateDescriptorPool", "failed to create descriptor pool");
-    return DescriptorPool;
-}
-
-static VkDescriptorSetLayout
-CreateDescriptorSetLayout(VkDevice LogicalDevice, ctk::sarray<VkDescriptorSetLayoutBinding, 4> *DescriptorSetLayoutBindings)
-{
-    VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo = {};
-    DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings->Count;
-    DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings->Data;
-    VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSetLayout),
-                     "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
-    return DescriptorSetLayout;
-}
+// static VkDescriptorPool
+// CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
+// {
+//     VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
+//     DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+//     DescriptorPoolCreateInfo.flags = 0;
+//     DescriptorPoolCreateInfo.maxSets = Config->MaxSets;
+//     DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
+//     DescriptorPoolCreateInfo.pPoolSizes = Config->Sizes.Data;
+//     VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
+//     ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
+//                      "vkCreateDescriptorPool", "failed to create descriptor pool");
+//     return DescriptorPool;
+// }
 
 static void
-AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, ctk::sarray<VkDescriptorSetLayout, 4> *DescriptorSetLayouts,
-                       ctk::sarray<VkDescriptorSet, 4> *DescriptorSets)
+AllocateDescriptorSet(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, descriptor_set *DescriptorSet)
 {
-    VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
-    DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
-    DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts->Count;
-    DescriptorSetAllocateInfo.pSetLayouts = DescriptorSetLayouts->Data;
-    ValidateVkResult(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSets->Data),
-                     "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
-    DescriptorSets->Count = DescriptorSetLayouts->Count;
 }
 
 static graphics_pipeline
@@ -1585,6 +1594,113 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
                              1, // Image Memory Count
                              &ImageMemoryBarrier); // Image Memory Barriers
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+}
+
+static uniform_buffer
+CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
+{
+    uniform_buffer UniformBuffer = {};
+    for(u32 _ = 0; _ < InstanceCount; ++_)
+    {
+        ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount, ElementSize));
+    }
+    return UniformBuffer;
+}
+
+static VkDescriptorPool
+CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount)
+{
+    // Calculate total count of descriptors of each type for all descriptor sets.
+    ctk::sarray<VkDescriptorPoolSize, 4> DescriptorPoolSizes = {};
+    for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfoCount; ++DescriptorSetIndex)
+    {
+        descriptor_set_info *DescriptorSetInfo = DescriptorSetInfos + DescriptorSetIndex;
+        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        {
+            descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
+            VkDescriptorPoolSize *SelectedDescriptorPoolSize = NULL;
+            for(u32 DescriptorPoolSizeIndex = 0; DescriptorPoolSizeIndex < DescriptorPoolSizes.Count; ++DescriptorPoolSizeIndex)
+            {
+                VkDescriptorPoolSize *DescriptorPoolSize = DescriptorPoolSizes + DescriptorPoolSizeIndex;
+                if(DescriptorPoolSize->type == DescriptorInfo->Type)
+                {
+                    SelectedDescriptorPoolSize = DescriptorPoolSize;
+                    break;
+                }
+            }
+            if(SelectedDescriptorPoolSize == NULL)
+            {
+                SelectedDescriptorPoolSize = ctk::Push(&DescriptorPoolSizes, { DescriptorInfo->Type });
+            }
+            SelectedDescriptorPoolSize->descriptorCount += DescriptorInfo->Count * DescriptorSetInfo->InstanceCount;
+        }
+    }
+
+    // Calculate total descriptor set count.
+    u32 TotalDescriptorSetCount = 0;
+    for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfoCount; ++DescriptorSetIndex)
+    {
+        TotalDescriptorSetCount += DescriptorSetInfos[DescriptorSetIndex].InstanceCount;
+    }
+
+    VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
+    DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    DescriptorPoolCreateInfo.flags = 0;
+    DescriptorPoolCreateInfo.maxSets = TotalDescriptorSetCount;
+    DescriptorPoolCreateInfo.poolSizeCount = DescriptorPoolSizes.Count;
+    DescriptorPoolCreateInfo.pPoolSizes = DescriptorPoolSizes.Data;
+    VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
+                     "vkCreateDescriptorPool", "failed to create descriptor pool");
+    return DescriptorPool;
+}
+
+static void
+AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
+                       descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount,
+                       descriptor_set *DescriptorSets)
+{
+    for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfoCount; ++DescriptorSetIndex)
+    {
+        descriptor_set_info *DescriptorSetInfo = DescriptorSetInfos + DescriptorSetIndex;
+        descriptor_set *DescriptorSet = DescriptorSets + DescriptorSetIndex;
+
+        // Create descriptor set layout.
+        ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
+        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        {
+            descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
+            VkDescriptorSetLayoutBinding *DescriptorSetLayoutBinding = ctk::Push(&DescriptorSetLayoutBindings);
+            DescriptorSetLayoutBinding->binding = DescriptorBinding->Index;
+            DescriptorSetLayoutBinding->descriptorType = DescriptorBinding->Info->Type;
+            DescriptorSetLayoutBinding->descriptorCount = DescriptorBinding->Info->Count;
+            DescriptorSetLayoutBinding->stageFlags = DescriptorBinding->Info->ShaderStageFlags;
+            DescriptorSetLayoutBinding->pImmutableSamplers = NULL;
+        }
+
+        VkDescriptorSetLayoutCreateInfo DescriptorSetLayoutCreateInfo = {};
+        DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings.Count;
+        DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings.Data;
+        VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
+        ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSet->Layout),
+                         "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
+
+        // Allocate descriptor set instances.
+        ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
+        for(u32 _ = 0; _ < DescriptorSetInfo->InstanceCount; ++_)
+        {
+            ctk::Push(&DescriptorSetLayouts, DescriptorSet->Layout);
+        }
+        VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
+        DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
+        DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts.Count;
+        DescriptorSetAllocateInfo.pSetLayouts = DescriptorSetLayouts.Data;
+        ValidateVkResult(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSet->Instances.Data),
+                         "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+        DescriptorSet->Instances.Count = DescriptorSetLayouts.Count;
+    }
 }
 
 static VkDescriptorType
