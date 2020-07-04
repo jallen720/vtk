@@ -141,6 +141,11 @@ main()
     VkCommandPool GraphicsCommandPool = vtk::CreateCommandPool(Device.Logical, Device.QueueFamilyIndexes.Graphics);
 
     ////////////////////////////////////////////////////////////
+    /// Frame State
+    ////////////////////////////////////////////////////////////
+    vtk::frame_state FrameState = vtk::CreateFrameState(Device.Logical, 2, Swapchain.Images.Count);
+
+    ////////////////////////////////////////////////////////////
     /// Data
     ////////////////////////////////////////////////////////////
 
@@ -383,11 +388,6 @@ main()
         vkCmdEndRenderPass(CommandBuffer);
         vtk::ValidateVkResult(vkEndCommandBuffer(CommandBuffer), "vkEndCommandBuffer", "error during render pass command recording");
     }
-
-    ////////////////////////////////////////////////////////////
-    /// Frame State
-    ////////////////////////////////////////////////////////////
-    vtk::frame_state FrameState = vtk::CreateFrameState(Device.Logical, 2, Swapchain.Images.Count);
 
     ////////////////////////////////////////////////////////////
     /// Main Loop
