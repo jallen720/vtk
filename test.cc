@@ -33,7 +33,19 @@ struct app_state
 struct vertex
 {
     ctk::vec3<f32> Position;
-    ctk::vec4<f32> Color;
+    ctk::vec2<f32> UV;
+};
+
+struct entity_ubo
+{
+    alignas(16) glm::mat4 ModelMatrix;
+    alignas(16) glm::mat4 MVPMatrix;
+};
+
+struct view_ubo
+{
+    alignas(16) glm::mat4 ViewMatrix;
+    alignas(16) glm::mat4 ViewProjectionMatrix;
 };
 
 ////////////////////////////////////////////////////////////
@@ -136,16 +148,16 @@ main()
     // Vertex Data
     vertex Vertexes[] =
     {
-        { { 1.0f,  0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { 1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-        { { 0.0f, -1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { 0.0f,  0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+        { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } },
+        { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } },
+        { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } },
+        { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } },
     };
     u32 Indexes[] = { 0, 1, 2, 0, 2, 3 };
 
     // Buffers
     vtk::buffer_config HostBufferConfig = {};
-    HostBufferConfig.Size = 2 * MEGABYTE;
+    HostBufferConfig.Size = 3 * MEGABYTE;
     HostBufferConfig.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     HostBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferConfig);
@@ -157,15 +169,25 @@ main()
     vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
 
     // Regions
-    vtk::region MVPMatrixRegion = vtk::AllocateRegion(&HostBuffer, 2, sizeof(glm::mat4));
-    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 1, MEGABYTE);
+    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2, MEGABYTE);
     vtk::region VertexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Vertexes));
     vtk::region IndexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Indexes));
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &VertexRegion, Vertexes, sizeof(Vertexes), 0);
     vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &IndexRegion, Indexes, sizeof(Indexes), 0);
 
     // Uniform Buffers
-    vtk::uniform_buffer MVPMatrixUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(glm::mat4), Swapchain.Images.Count);
+    vtk::uniform_buffer EntityUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(entity_ubo), Swapchain.Images.Count);
+    vtk::uniform_buffer ViewUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 1, sizeof(view_ubo), Swapchain.Images.Count);
+
+    // Textures
+    vtk::texture_info GrassTextureInfo = {};
+    GrassTextureInfo.Filter = VK_FILTER_NEAREST;
+    vtk::texture GrassTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
+                                                 &GrassTextureInfo);
+    vtk::texture_info DirtTextureInfo = {};
+    DirtTextureInfo.Filter = VK_FILTER_NEAREST;
+    vtk::texture DirtTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
+                                                &DirtTextureInfo);
 
     ////////////////////////////////////////////////////////////
     /// Depth Image
@@ -255,24 +277,45 @@ main()
     ////////////////////////////////////////////////////////////
     vtk::vertex_layout VertexLayout = {};
     u32 VertexPositionIndex = vtk::PushVertexAttribute(&VertexLayout, 3);
-    u32 VertexColorIndex = vtk::PushVertexAttribute(&VertexLayout, 4);
+    u32 VertexUVIndex = vtk::PushVertexAttribute(&VertexLayout, 2);
 
     ////////////////////////////////////////////////////////////
     /// Descriptor Sets
     ////////////////////////////////////////////////////////////
 
     // Descriptor Infos
-    vtk::descriptor_info MVPMatrixUniformBufferDescriptorInfo = {};
-    MVPMatrixUniformBufferDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    MVPMatrixUniformBufferDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    MVPMatrixUniformBufferDescriptorInfo.Count = 1;
-    MVPMatrixUniformBufferDescriptorInfo.UniformBuffer = &MVPMatrixUniformBuffer;
+    vtk::descriptor_info EntityDescriptorInfo = {};
+    EntityDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    EntityDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    EntityDescriptorInfo.Count = 1;
+    EntityDescriptorInfo.UniformBuffer = &EntityUniformBuffer;
+
+    vtk::descriptor_info GrassTextureDescriptorInfo = {};
+    GrassTextureDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    GrassTextureDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    GrassTextureDescriptorInfo.Count = 1;
+    GrassTextureDescriptorInfo.Texture = &GrassTexture;
+
+    vtk::descriptor_info DirtTextureDescriptorInfo = {};
+    DirtTextureDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    DirtTextureDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    DirtTextureDescriptorInfo.Count = 1;
+    DirtTextureDescriptorInfo.Texture = &DirtTexture;
 
     // Descriptor Set Info
     ctk::sarray<vtk::descriptor_set_info, 4> DescriptorSetInfos = {};
-    vtk::descriptor_set_info *DescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
-    DescriptorSetInfo->InstanceCount = Swapchain.Images.Count;
-    ctk::Push(&DescriptorSetInfo->DescriptorBindings, { 0, &MVPMatrixUniformBufferDescriptorInfo });
+
+    vtk::descriptor_set_info *EntityDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    EntityDescriptorSetInfo->InstanceCount = Swapchain.Images.Count;
+    ctk::Push(&EntityDescriptorSetInfo->DescriptorBindings, { 0, &EntityDescriptorInfo });
+
+    vtk::descriptor_set_info *GrassTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    GrassTextureDescriptorSetInfo->InstanceCount = 1;
+    ctk::Push(&GrassTextureDescriptorSetInfo->DescriptorBindings, { 0, &GrassTextureDescriptorInfo });
+
+    vtk::descriptor_set_info *DirtTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    DirtTextureDescriptorSetInfo->InstanceCount = 1;
+    ctk::Push(&DirtTextureDescriptorSetInfo->DescriptorBindings, { 0, &DirtTextureDescriptorInfo });
 
     // Pool
     VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, DescriptorSetInfos.Data, DescriptorSetInfos.Count);
@@ -280,39 +323,7 @@ main()
     // Allocate descriptor sets from pool.
     ctk::sarray<vtk::descriptor_set, 4> DescriptorSets = {};
     DescriptorSets.Count = DescriptorSetInfos.Count;
-    vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Data, DescriptorSetInfos.Count, DescriptorSets.Data);
-
-    // // Layouts
-    // ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
-    // ctk::Push(&DescriptorSetLayoutBindings, { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT });
-
-    // ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
-    // ctk::Push(&DescriptorSetLayouts, vtk::CreateDescriptorSetLayout(Device.Logical, &DescriptorSetLayoutBindings));
-
-    // // Allocation
-    // ctk::sarray<VkDescriptorSet, 4> DescriptorSets = {};
-    // vtk::AllocateDescriptorSets(Device.Logical, DescriptorPool, &DescriptorSetLayouts, &DescriptorSets);
-
-    // Updates
-    VkDescriptorBufferInfo DescriptorBufferInfo = {};
-    DescriptorBufferInfo.buffer = MVPMatrixRegion.Buffer->Handle;
-    DescriptorBufferInfo.offset = MVPMatrixRegion.Offset;
-    DescriptorBufferInfo.range = MVPMatrixRegion.Size;
-
-    ctk::sarray<VkWriteDescriptorSet, 4> WriteDescriptorSets = {};
-    for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSets[0].Instances.Count; ++InstanceIndex)
-    {
-        VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
-        WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        WriteDescriptorSet->dstSet = DescriptorSets[0].Instances[InstanceIndex];
-        WriteDescriptorSet->dstBinding = 0;
-        WriteDescriptorSet->dstArrayElement = 0;
-        WriteDescriptorSet->descriptorCount = 1;
-        WriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        WriteDescriptorSet->pBufferInfo = &DescriptorBufferInfo;
-    }
-
-    vkUpdateDescriptorSets(Device.Logical, WriteDescriptorSets.Count, WriteDescriptorSets.Data, 0, NULL);
+    vtk::CreateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Data, DescriptorSetInfos.Count, DescriptorSets.Data);
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
@@ -321,8 +332,9 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &VertexShader);
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
-    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexColorIndex });
+    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexUVIndex });
     ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[0].Layout);
+    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[1].Layout);
     GraphicsPipelineConfig.VertexLayout = &VertexLayout;
     GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -373,13 +385,15 @@ main()
                              VK_INDEX_TYPE_UINT32);
         for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
         {
-            u32 DynamicOffsets[1] = { EntityIndex * sizeof(glm::mat4) };
+            u32 DynamicOffsets[] = { EntityIndex * sizeof(entity_ubo) };
+            VkDescriptorSet TextureDescriptorSet = DescriptorSets[EntityIndex + 1].Instances[0];
+            VkDescriptorSet DescriptorSetsToBind[] = { DescriptorSets[0].Instances[FrameIndex], TextureDescriptorSet };
             vkCmdBindDescriptorSets(CommandBuffer,
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     GraphicsPipeline.Layout,
                                     0, // First Set Number
-                                    1,
-                                    &DescriptorSets[0].Instances[FrameIndex], // Sets to be bound to [first .. first + count]
+                                    CTK_ARRAY_COUNT(DescriptorSetsToBind),
+                                    DescriptorSetsToBind, // Sets to be bound to [first .. first + count]
                                     CTK_ARRAY_COUNT(DynamicOffsets), // Dynamic Offset Count
                                     DynamicOffsets); // Dynamic Offsets
             vkCmdDrawIndexed(CommandBuffer,
@@ -484,7 +498,7 @@ main()
         ////////////////////////////////////////////////////////////
         /// Update Uniform Data
         ////////////////////////////////////////////////////////////
-        alignas(16) glm::mat4 MVPMatrixes[2] = {};
+        entity_ubo EntityUBOs[2] = {};
 
         // View Matrix
         glm::mat4 CameraMatrix(1.0f);
@@ -508,10 +522,11 @@ main()
             ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 1.0f, 0.0f, 0.0f });
             ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 1.0f, 0.0f });
             ModelMatrix = glm::rotate(ModelMatrix, glm::radians(0.0f), { 0.0f, 0.0f, 1.0f });
-            ModelMatrix = scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
-            MVPMatrixes[EntityIndex] = ProjectionMatrix * ViewMatrix * ModelMatrix;
+            ModelMatrix = glm::scale(ModelMatrix, { 1.0f, 1.0f, 1.0f });
+            EntityUBOs[EntityIndex].ModelMatrix = ModelMatrix;
+            EntityUBOs[EntityIndex].MVPMatrix = ProjectionMatrix * ViewMatrix * ModelMatrix;
         }
-        vtk::WriteToHostRegion(Device.Logical, &MVPMatrixRegion, MVPMatrixes, sizeof(glm::mat4) * 2, 0);
+        vtk::WriteToHostRegion(Device.Logical, EntityUniformBuffer.Regions + FrameState.CurrentFrameIndex, EntityUBOs, sizeof(EntityUBOs), 0);
 
         ////////////////////////////////////////////////////////////
         /// Rendering

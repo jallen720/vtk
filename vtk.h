@@ -1,6 +1,10 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
+
 #include "ctk/ctk.h"
 
 ////////////////////////////////////////////////////////////
@@ -115,6 +119,7 @@ struct image
     VkDeviceSize Height;
     VkFormat Format;
     VkImageView View;
+    VkImageLayout Layout;
 };
 
 struct attachment
@@ -236,12 +241,24 @@ struct uniform_buffer
     ctk::sarray<region, 4> Regions;
 };
 
+struct texture_info
+{
+    VkFilter Filter;
+};
+
+struct texture
+{
+    image Image;
+    VkSampler Sampler;
+};
+
 struct descriptor_info
 {
     VkDescriptorType Type;
     VkShaderStageFlags ShaderStageFlags;
     u32 Count;
     uniform_buffer* UniformBuffer;
+    texture *Texture;
 };
 
 struct descriptor_binding
@@ -261,6 +278,15 @@ struct descriptor_set
     ctk::sarray<VkDescriptorSet, 4> Instances;
     VkDescriptorSetLayout Layout;
 };
+
+////////////////////////////////////////////////////////////
+/// Declarations
+////////////////////////////////////////////////////////////
+static void
+WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion);
+
+static void
+TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout);
 
 ////////////////////////////////////////////////////////////
 /// Internal
@@ -1102,6 +1128,85 @@ CreateImage(device *Device, image_config *Config)
     return Image;
 }
 
+static texture
+LoadTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
+{
+    texture Texture = {};
+
+    // Load image from path.
+    static const u32 IMAGE_CHANNELS = STBI_rgb_alpha;
+    s32 ImageWidth = 0;
+    s32 ImageHeight = 0;
+    s32 ImageChannelCount = 0;
+    stbi_uc *ImageData = stbi_load(Path, &ImageWidth, &ImageHeight, &ImageChannelCount, IMAGE_CHANNELS);
+    if(ImageData == NULL)
+    {
+        CTK_FATAL("failed to load image from \"%s\"", Path)
+    }
+
+    // Create texture image.
+    image_config TextureImageConfig = {};
+    TextureImageConfig.Width = ImageWidth;
+    TextureImageConfig.Height = ImageHeight;
+    TextureImageConfig.Format = VK_FORMAT_R8G8B8A8_UNORM; // Since stbi_load() used STBI_rgb_alpha.
+    TextureImageConfig.Tiling = VK_IMAGE_TILING_OPTIMAL;
+    TextureImageConfig.UsageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    TextureImageConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    TextureImageConfig.AspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    Texture.Image = CreateImage(Device, &TextureImageConfig);
+
+    // Write to texture image.
+    WriteToHostRegion(Device->Logical, StagingRegion, ImageData, Texture.Image.Width * Texture.Image.Height * IMAGE_CHANNELS, 0);
+    TransitionImageLayout(Device, CommandPool, &Texture.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VkBufferImageCopy BufferImageCopyRegions[1] = {};
+    BufferImageCopyRegions[0].bufferOffset = 0;//StagingRegion->Offset;
+    BufferImageCopyRegions[0].bufferRowLength = 0;
+    BufferImageCopyRegions[0].bufferImageHeight = 0;
+    BufferImageCopyRegions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    BufferImageCopyRegions[0].imageSubresource.mipLevel = 0;
+    BufferImageCopyRegions[0].imageSubresource.baseArrayLayer = 0;
+    BufferImageCopyRegions[0].imageSubresource.layerCount = 1;
+    BufferImageCopyRegions[0].imageOffset.x = 0;
+    BufferImageCopyRegions[0].imageOffset.y = 0;
+    BufferImageCopyRegions[0].imageOffset.z = 0;
+    BufferImageCopyRegions[0].imageExtent.width = Texture.Image.Width;
+    BufferImageCopyRegions[0].imageExtent.height = Texture.Image.Height;
+    BufferImageCopyRegions[0].imageExtent.depth = 1;
+    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+        vkCmdCopyBufferToImage(CommandBuffer, StagingRegion->Buffer->Handle,
+                               Texture.Image.Handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               CTK_ARRAY_COUNT(BufferImageCopyRegions), BufferImageCopyRegions);
+    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+    TransitionImageLayout(Device, CommandPool, &Texture.Image,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // Create texture sampler.
+    VkSamplerCreateInfo SamplerCreateInfo = {};
+    SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    SamplerCreateInfo.magFilter = TextureInfo->Filter;
+    SamplerCreateInfo.minFilter = TextureInfo->Filter;
+    SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    SamplerCreateInfo.maxAnisotropy = 16;
+    SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    SamplerCreateInfo.compareEnable = VK_FALSE;
+    SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    SamplerCreateInfo.mipLodBias = 0.0f;
+    SamplerCreateInfo.minLod = 0.0f;
+    SamplerCreateInfo.maxLod = 0.0f;
+    ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Texture.Sampler),
+                     "vkCreateSampler", "failed to create texture sampler");
+
+    // Cleanup
+    stbi_image_free(ImageData);
+
+    return Texture;
+}
+
 static render_pass
 CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
 {
@@ -1590,6 +1695,7 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
                              1, // Image Memory Count
                              &ImageMemoryBarrier); // Image Memory Barriers
     SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+    Image->Layout = NewLayout;
 }
 
 static uniform_buffer
@@ -1679,7 +1785,6 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings.Count;
         DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings.Data;
-        VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
         ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSet->Layout),
                          "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
 
@@ -1702,26 +1807,40 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 
         // Update descriptor set instances with their associated data.
         ctk::sarray<VkDescriptorBufferInfo, 4> DescriptorBufferInfos = {};
-        ctk::sarray<VkWriteDescriptorSet, 12> WriteDescriptorSets = {};
-        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        ctk::sarray<VkDescriptorImageInfo, 4> DescriptorImageInfos = {};
+        ctk::sarray<VkWriteDescriptorSet, 4> WriteDescriptorSets = {};
+        for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSet->Instances.Count; ++InstanceIndex)
         {
-            descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
-            for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSet->Instances.Count; ++InstanceIndex)
+            for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
             {
-                region *UniformBufferRegion = DescriptorBinding->Info->UniformBuffer->Regions + InstanceIndex;
-                VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
-                DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
-                DescriptorBufferInfo->offset = UniformBufferRegion->Offset;
-                DescriptorBufferInfo->range = UniformBufferRegion->Size;
-
+                descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
                 VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
                 WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 WriteDescriptorSet->dstSet = DescriptorSet->Instances[InstanceIndex];
                 WriteDescriptorSet->dstBinding = DescriptorBinding->Index;
                 WriteDescriptorSet->dstArrayElement = 0;
-                WriteDescriptorSet->descriptorCount = 1;
-                WriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-                WriteDescriptorSet->pBufferInfo = DescriptorBufferInfo;
+                WriteDescriptorSet->descriptorCount = DescriptorBinding->Info->Count;
+                WriteDescriptorSet->descriptorType = DescriptorBinding->Info->Type;
+
+                if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+                   WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+                {
+                    region *UniformBufferRegion = DescriptorBinding->Info->UniformBuffer->Regions + InstanceIndex;
+                    VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
+                    DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
+                    DescriptorBufferInfo->offset = UniformBufferRegion->Offset;
+                    DescriptorBufferInfo->range = UniformBufferRegion->Size;
+                    WriteDescriptorSet->pBufferInfo = DescriptorBufferInfo;
+                }
+                else if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                {
+                    texture *Texture = DescriptorBinding->Info->Texture;
+                    VkDescriptorImageInfo *DescriptorImageInfo = ctk::Push(&DescriptorImageInfos);
+                    DescriptorImageInfo->sampler = Texture->Sampler;
+                    DescriptorImageInfo->imageView = Texture->Image.View;
+                    DescriptorImageInfo->imageLayout = Texture->Image.Layout;
+                    WriteDescriptorSet->pImageInfo = DescriptorImageInfo;
+                }
             }
         }
         vkUpdateDescriptorSets(LogicalDevice, WriteDescriptorSets.Count, WriteDescriptorSets.Data, 0, NULL);
