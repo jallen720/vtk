@@ -94,8 +94,6 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
-    // VkDeviceSize ElementCount;
-    VkDeviceSize ElementSize;
 };
 
 struct image_config
@@ -1053,8 +1051,6 @@ AllocateRegion(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSi
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
     Region.Size = RegionSize;
-    // Region.ElementCount = ElementCount;
-    Region.ElementSize = ElementSize;
     Buffer->End += RegionSize;
     return Region;
 }
@@ -1630,7 +1626,8 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetI
             }
             if(SelectedDescriptorPoolSize == NULL)
             {
-                SelectedDescriptorPoolSize = ctk::Push(&DescriptorPoolSizes, { DescriptorInfo->Type });
+                SelectedDescriptorPoolSize = ctk::Push(&DescriptorPoolSizes);
+                SelectedDescriptorPoolSize->type = DescriptorInfo->Type;
             }
             SelectedDescriptorPoolSize->descriptorCount += DescriptorInfo->Count * DescriptorSetInfo->InstanceCount;
         }
@@ -1656,9 +1653,9 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetI
 }
 
 static void
-AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
-                       descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount,
-                       descriptor_set *DescriptorSets)
+CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
+                     descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount,
+                     descriptor_set *DescriptorSets)
 {
     for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfoCount; ++DescriptorSetIndex)
     {
@@ -1686,12 +1683,14 @@ AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSet->Layout),
                          "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
 
-        // Allocate descriptor set instances.
+        // Duplicate layout for each instance.
         ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
         for(u32 _ = 0; _ < DescriptorSetInfo->InstanceCount; ++_)
         {
             ctk::Push(&DescriptorSetLayouts, DescriptorSet->Layout);
         }
+
+        // Allocate descriptor set instances.
         VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo = {};
         DescriptorSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
@@ -1700,6 +1699,32 @@ AllocateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         ValidateVkResult(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSet->Instances.Data),
                          "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
         DescriptorSet->Instances.Count = DescriptorSetLayouts.Count;
+
+        // Update descriptor set instances with their associated data.
+        ctk::sarray<VkDescriptorBufferInfo, 4> DescriptorBufferInfos = {};
+        ctk::sarray<VkWriteDescriptorSet, 12> WriteDescriptorSets = {};
+        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        {
+            descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
+            for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSet->Instances.Count; ++InstanceIndex)
+            {
+                region *UniformBufferRegion = DescriptorBinding->Info->UniformBuffer->Regions + InstanceIndex;
+                VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
+                DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
+                DescriptorBufferInfo->offset = UniformBufferRegion->Offset;
+                DescriptorBufferInfo->range = UniformBufferRegion->Size;
+
+                VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
+                WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                WriteDescriptorSet->dstSet = DescriptorSet->Instances[InstanceIndex];
+                WriteDescriptorSet->dstBinding = DescriptorBinding->Index;
+                WriteDescriptorSet->dstArrayElement = 0;
+                WriteDescriptorSet->descriptorCount = 1;
+                WriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+                WriteDescriptorSet->pBufferInfo = DescriptorBufferInfo;
+            }
+        }
+        vkUpdateDescriptorSets(LogicalDevice, WriteDescriptorSets.Count, WriteDescriptorSets.Data, 0, NULL);
     }
 }
 
