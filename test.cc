@@ -48,6 +48,21 @@ struct view_ubo
     alignas(16) glm::mat4 ViewProjectionMatrix;
 };
 
+struct mesh
+{
+    ctk::sarray<vertex, 24> Vertexes;
+    ctk::sarray<u32, 36> Indexes;
+    vtk::region VertexRegion;
+    vtk::region IndexRegion;
+};
+
+struct render_entity
+{
+    ctk::sarray<vtk::descriptor_set *, 4> DescriptorSets;
+    vtk::graphics_pipeline *GraphicsPipeline;
+    mesh *Mesh;
+};
+
 ////////////////////////////////////////////////////////////
 /// Internal
 ////////////////////////////////////////////////////////////
@@ -142,54 +157,6 @@ main()
     vtk::frame_state FrameState = vtk::CreateFrameState(Device.Logical, 2, Swapchain.Images.Count);
 
     ////////////////////////////////////////////////////////////
-    /// Data
-    ////////////////////////////////////////////////////////////
-
-    // Vertex Data
-    vertex Vertexes[] =
-    {
-        { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } },
-        { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } },
-        { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } },
-        { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } },
-    };
-    u32 Indexes[] = { 0, 1, 2, 0, 2, 3 };
-
-    // Buffers
-    vtk::buffer_config HostBufferConfig = {};
-    HostBufferConfig.Size = 3 * MEGABYTE;
-    HostBufferConfig.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    HostBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferConfig);
-
-    vtk::buffer_config DeviceBufferConfig = {};
-    DeviceBufferConfig.Size = 2 * MEGABYTE;
-    DeviceBufferConfig.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    DeviceBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
-
-    // Regions
-    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2, MEGABYTE);
-    vtk::region VertexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Vertexes));
-    vtk::region IndexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, sizeof(Indexes));
-    vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &VertexRegion, Vertexes, sizeof(Vertexes), 0);
-    vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &IndexRegion, Indexes, sizeof(Indexes), 0);
-
-    // Uniform Buffers
-    vtk::uniform_buffer EntityUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(entity_ubo), Swapchain.Images.Count);
-    vtk::uniform_buffer ViewUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 1, sizeof(view_ubo), Swapchain.Images.Count);
-
-    // Textures
-    vtk::texture_info GrassTextureInfo = {};
-    GrassTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture GrassTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
-                                                 &GrassTextureInfo);
-    vtk::texture_info DirtTextureInfo = {};
-    DirtTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture DirtTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
-                                                &DirtTextureInfo);
-
-    ////////////////////////////////////////////////////////////
     /// Depth Image
     ////////////////////////////////////////////////////////////
     vtk::image_config DepthImageConfig = {};
@@ -280,6 +247,44 @@ main()
     u32 VertexUVIndex = vtk::PushVertexAttribute(&VertexLayout, 2);
 
     ////////////////////////////////////////////////////////////
+    /// Memory
+    ////////////////////////////////////////////////////////////
+
+    // Buffers
+    vtk::buffer_config HostBufferConfig = {};
+    HostBufferConfig.Size = 10 * MEGABYTE;
+    HostBufferConfig.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    HostBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferConfig);
+
+    vtk::buffer_config DeviceBufferConfig = {};
+    DeviceBufferConfig.Size = 10 * MEGABYTE;
+    DeviceBufferConfig.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    DeviceBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
+
+    // Regions
+    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2, MEGABYTE);
+
+    ////////////////////////////////////////////////////////////
+    /// Descriptor Set Resources
+    ////////////////////////////////////////////////////////////
+
+    // Uniform Buffers
+    vtk::uniform_buffer EntityUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(entity_ubo), Swapchain.Images.Count);
+    vtk::uniform_buffer ViewUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 1, sizeof(view_ubo), Swapchain.Images.Count);
+
+    // Textures
+    vtk::texture_info GrassTextureInfo = {};
+    GrassTextureInfo.Filter = VK_FILTER_NEAREST;
+    vtk::texture GrassTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
+                                                 &GrassTextureInfo);
+    vtk::texture_info DirtTextureInfo = {};
+    DirtTextureInfo.Filter = VK_FILTER_NEAREST;
+    vtk::texture DirtTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
+                                                &DirtTextureInfo);
+
+    ////////////////////////////////////////////////////////////
     /// Descriptor Sets
     ////////////////////////////////////////////////////////////
 
@@ -342,6 +347,61 @@ main()
     vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
 
     ////////////////////////////////////////////////////////////
+    /// Data
+    ////////////////////////////////////////////////////////////
+
+    // Meshes
+    mesh Meshes[2] = {};
+    mesh *QuadMesh = Meshes + 0;
+    mesh *CubeMesh = Meshes + 1;
+    u32 QuadIndexes[] = { 0, 1, 2, 0, 2, 3 };
+    u32 CubeIndexes[] =
+    {
+        0, 1, 2, 0, 2, 3,
+        4, 5, 6, 4, 6, 7,
+    };
+    ctk::Push(&QuadMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
+    ctk::Push(&QuadMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::Push(&QuadMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::Push(&QuadMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
+    ctk::Push(&QuadMesh->Indexes, QuadIndexes, CTK_ARRAY_COUNT(QuadIndexes));
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 1.0f }, { 0.0f, 1.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 1.0f }, { 0.0f, 0.0f } });
+    ctk::Push(&CubeMesh->Indexes, CubeIndexes, CTK_ARRAY_COUNT(CubeIndexes));
+    for(u32 MeshIndex = 0; MeshIndex < CTK_ARRAY_COUNT(Meshes); ++MeshIndex)
+    {
+        mesh *Mesh = Meshes + MeshIndex;
+        u32 VertexByteCount = ctk::ByteCount(&Mesh->Vertexes);
+        u32 IndexByteCount = ctk::ByteCount(&Mesh->Indexes);
+        Mesh->VertexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, VertexByteCount);
+        Mesh->IndexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, IndexByteCount);
+        vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->VertexRegion, Mesh->Vertexes.Data, VertexByteCount, 0);
+        vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->IndexRegion, Mesh->Indexes.Data, IndexByteCount, 0);
+    }
+
+    ////////////////////////////////////////////////////////////
+    /// Scene
+    ////////////////////////////////////////////////////////////
+    ctk::sarray<render_entity, 4> RenderEntities = {};
+    render_entity *QuadEntity = ctk::Push(&RenderEntities);
+    ctk::Push(&QuadEntity->DescriptorSets, DescriptorSets + 0);
+    ctk::Push(&QuadEntity->DescriptorSets, DescriptorSets + 1);
+    QuadEntity->GraphicsPipeline = &GraphicsPipeline;
+    QuadEntity->Mesh = QuadMesh;
+
+    render_entity *CubeEntity = ctk::Push(&RenderEntities);
+    ctk::Push(&CubeEntity->DescriptorSets, DescriptorSets + 0);
+    ctk::Push(&CubeEntity->DescriptorSets, DescriptorSets + 2);
+    CubeEntity->GraphicsPipeline = &GraphicsPipeline;
+    CubeEntity->Mesh = CubeMesh;
+
+    ////////////////////////////////////////////////////////////
     /// Record render pass.
     ////////////////////////////////////////////////////////////
     VkRect2D RenderArea = {};
@@ -354,8 +414,6 @@ main()
     CommandBufferBeginInfo.flags = 0;
     CommandBufferBeginInfo.pInheritanceInfo = NULL;
 
-    VkBuffer VertexBuffers[] = { VertexRegion.Buffer->Handle };
-    VkDeviceSize VertexBufferOffsets[] = { VertexRegion.Offset };
     for(u32 FrameIndex = 0; FrameIndex < Swapchain.Images.Count; ++FrameIndex)
     {
         VkCommandBuffer CommandBuffer = CommandBuffers[FrameIndex];
@@ -373,35 +431,25 @@ main()
         vkCmdBeginRenderPass(CommandBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         // Render Commands
-        vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline.Handle);
-        vkCmdBindVertexBuffers(CommandBuffer,
-                               0, // First Binding
-                               1, // Binding Count
-                               VertexBuffers,
-                               VertexBufferOffsets);
-        vkCmdBindIndexBuffer(CommandBuffer,
-                             IndexRegion.Buffer->Handle,
-                             IndexRegion.Offset,
-                             VK_INDEX_TYPE_UINT32);
-        for(u32 EntityIndex = 0; EntityIndex < 2; ++EntityIndex)
+        for(u32 EntityIndex = 0; EntityIndex < RenderEntities.Count; ++EntityIndex)
         {
-            u32 DynamicOffsets[] = { EntityIndex * sizeof(entity_ubo) };
-            VkDescriptorSet TextureDescriptorSet = DescriptorSets[EntityIndex + 1].Instances[0];
-            VkDescriptorSet DescriptorSetsToBind[] = { DescriptorSets[0].Instances[FrameIndex], TextureDescriptorSet };
-            vkCmdBindDescriptorSets(CommandBuffer,
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    GraphicsPipeline.Layout,
-                                    0, // First Set Number
-                                    CTK_ARRAY_COUNT(DescriptorSetsToBind),
-                                    DescriptorSetsToBind, // Sets to be bound to [first .. first + count]
-                                    CTK_ARRAY_COUNT(DynamicOffsets), // Dynamic Offset Count
-                                    DynamicOffsets); // Dynamic Offsets
-            vkCmdDrawIndexed(CommandBuffer,
-                             CTK_ARRAY_COUNT(Indexes),
-                             1, // Instance Count (instanced rendering only)
-                             0, // First Index
-                             0, // Vertex Offset
-                             0); // First instance index (instanced rendering only)
+            render_entity *RenderEntity = RenderEntities + EntityIndex;
+            mesh *Mesh = RenderEntity->Mesh;
+
+            // Graphics Pipeline
+            vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderEntity->GraphicsPipeline->Handle);
+
+            // Descriptor Sets
+            vtk::BindDescriptorSets(CommandBuffer, RenderEntity->GraphicsPipeline->Layout,
+                                    RenderEntity->DescriptorSets.Data, RenderEntity->DescriptorSets.Count,
+                                    FrameIndex, EntityIndex);
+
+            // Vertex/Index Buffers
+            vkCmdBindVertexBuffers(CommandBuffer, 0, 1, &Mesh->VertexRegion.Buffer->Handle, &Mesh->VertexRegion.Offset);
+            vkCmdBindIndexBuffer(CommandBuffer, Mesh->IndexRegion.Buffer->Handle, Mesh->IndexRegion.Offset, VK_INDEX_TYPE_UINT32);
+
+            // Draw
+            vkCmdDrawIndexed(CommandBuffer, Mesh->Indexes.Count, 1, 0, 0, 0);
         }
 
         // End

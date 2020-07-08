@@ -98,6 +98,7 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
+    u32 ElementSize;
 };
 
 struct image_config
@@ -276,6 +277,7 @@ struct descriptor_set_info
 struct descriptor_set
 {
     ctk::sarray<VkDescriptorSet, 4> Instances;
+    ctk::sarray<u32, 4> DynamicOffsets;
     VkDescriptorSetLayout Layout;
 };
 
@@ -1065,7 +1067,7 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 }
 
 static region
-AllocateRegion(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize)
+AllocateRegion(buffer *Buffer, u32 ElementCount, u32 ElementSize)
 {
     VkDeviceSize RegionSize = ElementCount * ElementSize;
     if(Buffer->End + RegionSize > Buffer->Size)
@@ -1077,6 +1079,7 @@ AllocateRegion(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSi
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
     Region.Size = RegionSize;
+    Region.ElementSize = ElementSize;
     Buffer->End += RegionSize;
     return Region;
 }
@@ -1768,6 +1771,16 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         descriptor_set_info *DescriptorSetInfo = DescriptorSetInfos + DescriptorSetIndex;
         descriptor_set *DescriptorSet = DescriptorSets + DescriptorSetIndex;
 
+        // Cache dynamic offsets for dynamic uniform buffer descriptors.
+        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        {
+            descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
+            if(DescriptorInfo->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+            {
+                ctk::Push(&DescriptorSet->DynamicOffsets, DescriptorInfo->UniformBuffer->Regions[0].ElementSize);
+            }
+        }
+
         // Create descriptor set layout.
         ctk::sarray<VkDescriptorSetLayoutBinding, 4> DescriptorSetLayoutBindings = {};
         for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
@@ -1845,6 +1858,30 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         }
         vkUpdateDescriptorSets(LogicalDevice, WriteDescriptorSets.Count, WriteDescriptorSets.Data, 0, NULL);
     }
+}
+
+static void
+BindDescriptorSets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipelineLayout,
+                   descriptor_set **DescriptorSets, u32 DescriptorSetCount, u32 InstanceIndex, u32 DynamicIndex = 0)
+{
+    ctk::sarray<VkDescriptorSet, 4> DescriptorSetsToBind = {};
+    ctk::sarray<u32, 16> DynamicOffsets = {};
+    for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetCount; ++DescriptorSetIndex)
+    {
+        vtk::descriptor_set *DescriptorSet = DescriptorSets[DescriptorSetIndex];
+        u32 DescriptorSetInstanceIndex = DescriptorSet->Instances.Count > 1 ? InstanceIndex : 0;
+        ctk::Push(&DescriptorSetsToBind, DescriptorSet->Instances[DescriptorSetInstanceIndex]);
+        for(u32 DynamicOffsetIndex = 0; DynamicOffsetIndex < DescriptorSet->DynamicOffsets.Count; ++DynamicOffsetIndex)
+        {
+            ctk::Push(&DynamicOffsets, DescriptorSet->DynamicOffsets[DynamicOffsetIndex] * DynamicIndex);
+        }
+    }
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipelineLayout,
+                            0, // First Set Number
+                            DescriptorSetsToBind.Count,
+                            DescriptorSetsToBind.Data, // Sets to be bound to [first .. first + count]
+                            DynamicOffsets.Count,
+                            DynamicOffsets.Data);
 }
 
 static VkDescriptorType
