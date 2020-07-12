@@ -258,7 +258,7 @@ struct descriptor_info
     VkDescriptorType Type;
     VkShaderStageFlags ShaderStageFlags;
     u32 Count;
-    uniform_buffer* UniformBuffer;
+    uniform_buffer *UniformBuffer;
     texture *Texture;
 };
 
@@ -1667,6 +1667,7 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
 static uniform_buffer
 CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
 {
+    CTK_ASSERT(InstanceCount > 0)
     uniform_buffer UniformBuffer = {};
     for(u32 _ = 0; _ < InstanceCount; ++_)
     {
@@ -1734,6 +1735,27 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         descriptor_set_info *DescriptorSetInfo = DescriptorSetInfos + DescriptorSetIndex;
         descriptor_set *DescriptorSet = DescriptorSets + DescriptorSetIndex;
 
+        // Validate uniform buffers either contain a region for every descriptor set instance (dynamically updated uniform buffers) or 1
+        // region to be shared between all instances (static/constant uniform buffer). This is because uniform buffers that are written to
+        // need to have separate instances for each frame, so the descriptor sets that use them must have an instances for each frame as
+        // well. However, a descriptor set can refer to both a uniform buffer that is written to, and one that is read only (which doesn't
+        // need separate instances), so we bind the single read-only uniform buffer to each descriptor set instances in that case.
+        for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
+        {
+            descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
+            b32 DescriptorIsUniformBuffer = DescriptorInfo->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+                                            DescriptorInfo->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            if(DescriptorIsUniformBuffer &&
+               DescriptorInfo->UniformBuffer->Regions.Count != DescriptorSetInfo->InstanceCount &&
+               DescriptorInfo->UniformBuffer->Regions.Count != 1)
+            {
+                CTK_FATAL("uniform buffer region count: %u; descriptor set instance count: %u; uniform buffer must either have 1 region per "
+                          "descriptor set instance or only 1 region, which will be shared between all descriptor set instances.",
+                          DescriptorInfo->UniformBuffer->Regions.Count,
+                          DescriptorSetInfo->InstanceCount)
+            }
+        }
+
         // Cache dynamic offsets for dynamic uniform buffer descriptors.
         for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
         {
@@ -1782,35 +1804,45 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         DescriptorSet->Instances.Count = DescriptorSetLayouts.Count;
 
         // Update descriptor set instances with their associated data.
-        ctk::sarray<VkDescriptorBufferInfo, 4> DescriptorBufferInfos = {};
-        ctk::sarray<VkDescriptorImageInfo, 4> DescriptorImageInfos = {};
-        ctk::sarray<VkWriteDescriptorSet, 4> WriteDescriptorSets = {};
+        ctk::sarray<VkDescriptorBufferInfo, 6> DescriptorBufferInfos = {};
+        ctk::sarray<VkDescriptorImageInfo, 6> DescriptorImageInfos = {};
+        ctk::sarray<VkWriteDescriptorSet, 6> WriteDescriptorSets = {};
         for(u32 InstanceIndex = 0; InstanceIndex < DescriptorSet->Instances.Count; ++InstanceIndex)
         {
             for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
             {
                 descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
+                descriptor_info *DescriptorInfo = DescriptorBinding->Info;
                 VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
                 WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 WriteDescriptorSet->dstSet = DescriptorSet->Instances[InstanceIndex];
                 WriteDescriptorSet->dstBinding = DescriptorBinding->Index;
                 WriteDescriptorSet->dstArrayElement = 0;
-                WriteDescriptorSet->descriptorCount = DescriptorBinding->Info->Count;
-                WriteDescriptorSet->descriptorType = DescriptorBinding->Info->Type;
+                WriteDescriptorSet->descriptorCount = DescriptorInfo->Count;
+                WriteDescriptorSet->descriptorType = DescriptorInfo->Type;
 
                 if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
                    WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
                 {
-                    region *UniformBufferRegion = DescriptorBinding->Info->UniformBuffer->Regions + InstanceIndex;
-                    VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
-                    DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
-                    DescriptorBufferInfo->offset = UniformBufferRegion->Offset;
-                    DescriptorBufferInfo->range = UniformBufferRegion->Size;
-                    WriteDescriptorSet->pBufferInfo = DescriptorBufferInfo;
+                    uniform_buffer *UniformBuffer = DescriptorInfo->UniformBuffer;
+
+                    // If there is a uniform buffer region for every descriptor set instance, bind each to its respective instance; else
+                    // bind the only uniform buffer region to each descriptor set instance.
+                    u32 UniformBufferRegionIndex = UniformBuffer->Regions.Count == DescriptorSet->Instances.Count ? InstanceIndex : 0;
+
+                    region *UniformBufferRegion = At(&UniformBuffer->Regions, UniformBufferRegionIndex);
+                    WriteDescriptorSet->pBufferInfo = DescriptorBufferInfos.Data + DescriptorBufferInfos.Count;
+                    for(u32 _ = 0; _ < DescriptorInfo->Count; ++_)
+                    {
+                        VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
+                        DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
+                        DescriptorBufferInfo->offset = UniformBufferRegion->Offset + (UniformBufferRegion->ElementSize * _);
+                        DescriptorBufferInfo->range = UniformBufferRegion->ElementSize;
+                    }
                 }
                 else if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                 {
-                    texture *Texture = DescriptorBinding->Info->Texture;
+                    texture *Texture = DescriptorInfo->Texture;
                     VkDescriptorImageInfo *DescriptorImageInfo = ctk::Push(&DescriptorImageInfos);
                     DescriptorImageInfo->sampler = Texture->Sampler;
                     DescriptorImageInfo->imageView = Texture->Image.View;
