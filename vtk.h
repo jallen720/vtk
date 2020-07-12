@@ -1015,23 +1015,6 @@ AllocateDeviceMemory(device *Device, VkMemoryRequirements *MemoryRequirements, V
     return Memory;
 }
 
-// // DEPRECATED
-// static u32
-// FindMemoryTypeIndex(VkPhysicalDeviceMemoryProperties *MemoryProperties, u32 MemoryTypeBits, VkMemoryPropertyFlags MemoryPropertyFlags)
-// {
-//     for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < MemoryProperties->memoryTypeCount; ++MemoryTypeIndex)
-//     {
-//         VkMemoryPropertyFlags MemoryTypePropertyFlags = MemoryProperties->memoryTypes[MemoryTypeIndex].propertyFlags;
-
-//         // Check if memory at index has correct type and properties.
-//         if((MemoryTypeBits & (1 << MemoryTypeIndex)) && (MemoryTypePropertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
-//         {
-//             return MemoryTypeIndex;
-//         }
-//     }
-//     CTK_FATAL("failed to find memory type index")
-// }
-
 static buffer
 CreateBuffer(device *Device, buffer_config *Config)
 {
@@ -1329,26 +1312,6 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     ctk::Push(&VertexLayout->Attributes, { FORMATS[ElementCount - 1], AttributeSize, VertexLayout->Size });
     VertexLayout->Size += AttributeSize;
     return AttributeIndex;
-}
-
-// static VkDescriptorPool
-// CreateDescriptorPool(VkDevice LogicalDevice, descriptor_pool_config *Config)
-// {
-//     VkDescriptorPoolCreateInfo DescriptorPoolCreateInfo = {};
-//     DescriptorPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-//     DescriptorPoolCreateInfo.flags = 0;
-//     DescriptorPoolCreateInfo.maxSets = Config->MaxSets;
-//     DescriptorPoolCreateInfo.poolSizeCount = Config->Sizes.Count;
-//     DescriptorPoolCreateInfo.pPoolSizes = Config->Sizes.Data;
-//     VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
-//     ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
-//                      "vkCreateDescriptorPool", "failed to create descriptor pool");
-//     return DescriptorPool;
-// }
-
-static void
-AllocateDescriptorSet(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool, descriptor_set *DescriptorSet)
-{
 }
 
 static graphics_pipeline
