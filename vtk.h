@@ -1509,14 +1509,14 @@ static frame_state
 CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount)
 {
     frame_state FrameState = {};
-    for(u32 _ = 0; _ < FrameCount; ++_)
+    CTK_REPEAT(FrameCount)
     {
         frame *Frame = ctk::Push(&FrameState.Frames);
         Frame->ImageAquiredSemaphore = CreateSemaphore(LogicalDevice);
         Frame->RenderFinishedSemaphore = CreateSemaphore(LogicalDevice);
         Frame->InFlightFence = CreateFence(LogicalDevice);
     }
-    for(u32 _ = 0; _ < SwapchainImageCount; ++_)
+    CTK_REPEAT(SwapchainImageCount)
     {
         ctk::Push(&FrameState.PreviousFrameInFlightFences, (VkFence)VK_NULL_HANDLE);
     }
@@ -1669,7 +1669,7 @@ CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize Elem
     CTK_ASSERT(InstanceCount > 0)
     uniform_buffer UniformBuffer = {};
     UniformBuffer.ElementSize = ElementSize;
-    for(u32 _ = 0; _ < InstanceCount; ++_)
+    CTK_REPEAT(InstanceCount)
     {
         ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount, ElementSize));
     }
@@ -1735,11 +1735,8 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         descriptor_set_info *DescriptorSetInfo = DescriptorSetInfos + DescriptorSetIndex;
         descriptor_set *DescriptorSet = DescriptorSets + DescriptorSetIndex;
 
-        // Validate uniform buffers either contain a region for every descriptor set instance (dynamically updated uniform buffers) or 1
-        // region to be shared between all instances (static/constant uniform buffer). This is because uniform buffers that are written to
-        // need to have separate instances for each frame, so the descriptor sets that use them must have an instances for each frame as
-        // well. However, a descriptor set can refer to both a uniform buffer that is written to, and one that is read only (which doesn't
-        // need separate instances), so we bind the single read-only uniform buffer to each descriptor set instances in that case.
+        // Require (1) 1:1 uniform buffer region to descriptor set instance for uniform buffers that need to be written to; or (2) 1 uniform
+        // buffer region to be shared between all descriptor set instances for uniform buffers that are read-only.
         for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
         {
             descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
@@ -1788,7 +1785,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 
         // Duplicate layout for each instance.
         ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
-        for(u32 _ = 0; _ < DescriptorSetInfo->InstanceCount; ++_)
+        CTK_REPEAT(DescriptorSetInfo->InstanceCount)
         {
             ctk::Push(&DescriptorSetLayouts, DescriptorSet->Layout);
         }
@@ -1832,7 +1829,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 
                     region *UniformBufferRegion = At(&UniformBuffer->Regions, UniformBufferRegionIndex);
                     WriteDescriptorSet->pBufferInfo = DescriptorBufferInfos.Data + DescriptorBufferInfos.Count;
-                    for(u32 _ = 0; _ < DescriptorInfo->Count; ++_)
+                    CTK_REPEAT(DescriptorInfo->Count)
                     {
                         VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
                         DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
