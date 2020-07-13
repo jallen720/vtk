@@ -98,7 +98,6 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
-    u32 ElementSize;
 };
 
 struct image_config
@@ -240,6 +239,7 @@ struct device_info
 struct uniform_buffer
 {
     ctk::sarray<region, 4> Regions;
+    u32 ElementSize;
 };
 
 struct texture_info
@@ -1062,7 +1062,6 @@ AllocateRegion(buffer *Buffer, u32 ElementCount, u32 ElementSize)
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
     Region.Size = RegionSize;
-    Region.ElementSize = ElementSize;
     Buffer->End += RegionSize;
     return Region;
 }
@@ -1669,6 +1668,7 @@ CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize Elem
 {
     CTK_ASSERT(InstanceCount > 0)
     uniform_buffer UniformBuffer = {};
+    UniformBuffer.ElementSize = ElementSize;
     for(u32 _ = 0; _ < InstanceCount; ++_)
     {
         ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount, ElementSize));
@@ -1762,7 +1762,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
             descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
             if(DescriptorInfo->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
             {
-                ctk::Push(&DescriptorSet->DynamicOffsets, DescriptorInfo->UniformBuffer->Regions[0].ElementSize);
+                ctk::Push(&DescriptorSet->DynamicOffsets, DescriptorInfo->UniformBuffer->ElementSize);
             }
         }
 
@@ -1836,8 +1836,8 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
                     {
                         VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
                         DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
-                        DescriptorBufferInfo->offset = UniformBufferRegion->Offset + (UniformBufferRegion->ElementSize * _);
-                        DescriptorBufferInfo->range = UniformBufferRegion->ElementSize;
+                        DescriptorBufferInfo->offset = UniformBufferRegion->Offset + (UniformBuffer->ElementSize * _);
+                        DescriptorBufferInfo->range = UniformBuffer->ElementSize;
                     }
                 }
                 else if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
