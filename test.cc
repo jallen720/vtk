@@ -271,13 +271,7 @@ main()
     ////////////////////////////////////////////////////////////
 
     // Uniform Buffers
-    alignas(16) ctk::vec4<f32> Colors[] = {{1,0,0,1},{0,1,0,1}};
-    struct { alignas(16) ctk::vec4<u32> a; alignas(16) ctk::vec4<u32> b; } Indexes = {{0},{1}};
     vtk::uniform_buffer EntityUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(entity_ubo), FrameState.Frames.Count);
-    vtk::uniform_buffer IndexUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, 16, 1);
-    vtk::uniform_buffer ColorUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(ctk::vec4<f32>), 1);
-    vtk::WriteToHostRegion(Device.Logical, IndexUniformBuffer.Regions + 0, &Indexes, sizeof(Indexes), 0);
-    vtk::WriteToHostRegion(Device.Logical, ColorUniformBuffer.Regions + 0, Colors, sizeof(Colors), 0);
 
     // Textures
     vtk::texture_info GrassTextureInfo = {};
@@ -300,12 +294,6 @@ main()
     EntityDescriptorInfo.Count = 1;
     EntityDescriptorInfo.UniformBuffer = &EntityUniformBuffer;
 
-    vtk::descriptor_info IndexDescriptorInfo = {};
-    IndexDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-    IndexDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    IndexDescriptorInfo.Count = 1;
-    IndexDescriptorInfo.UniformBuffer = &IndexUniformBuffer;
-
     vtk::descriptor_info GrassTextureDescriptorInfo = {};
     GrassTextureDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     GrassTextureDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -318,39 +306,31 @@ main()
     DirtTextureDescriptorInfo.Count = 1;
     DirtTextureDescriptorInfo.Texture = &DirtTexture;
 
-    vtk::descriptor_info ColorDescriptorInfo = {};
-    ColorDescriptorInfo.Type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    ColorDescriptorInfo.ShaderStageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    ColorDescriptorInfo.Count = 2;
-    ColorDescriptorInfo.UniformBuffer = &ColorUniformBuffer;
-
     // Descriptor Set Info
-    ctk::sarray<vtk::descriptor_set_info, 4> DescriptorSetInfos = {};
+    ctk::smap<vtk::descriptor_set_info, 4> DescriptorSetInfos = {};
 
-    vtk::descriptor_set_info *EntityDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    vtk::descriptor_set_info *EntityDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "entity");
     EntityDescriptorSetInfo->InstanceCount = FrameState.Frames.Count;
     ctk::Push(&EntityDescriptorSetInfo->DescriptorBindings, { 0, &EntityDescriptorInfo });
-    ctk::Push(&EntityDescriptorSetInfo->DescriptorBindings, { 1, &IndexDescriptorInfo });
 
-    vtk::descriptor_set_info *GrassTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    vtk::descriptor_set_info *GrassTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "grass_texture");
     GrassTextureDescriptorSetInfo->InstanceCount = 1;
     ctk::Push(&GrassTextureDescriptorSetInfo->DescriptorBindings, { 0, &GrassTextureDescriptorInfo });
 
-    vtk::descriptor_set_info *DirtTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
+    vtk::descriptor_set_info *DirtTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "dirt_texture");
     DirtTextureDescriptorSetInfo->InstanceCount = 1;
     ctk::Push(&DirtTextureDescriptorSetInfo->DescriptorBindings, { 0, &DirtTextureDescriptorInfo });
 
-    vtk::descriptor_set_info *ColorDescriptorSetInfo = ctk::Push(&DescriptorSetInfos);
-    ColorDescriptorSetInfo->InstanceCount = 1;
-    ctk::Push(&ColorDescriptorSetInfo->DescriptorBindings, { 0, &ColorDescriptorInfo });
-
     // Pool
-    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, DescriptorSetInfos.Data, DescriptorSetInfos.Count);
+    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, DescriptorSetInfos.Values, DescriptorSetInfos.Count);
 
-    // Allocate descriptor sets from pool.
-    ctk::sarray<vtk::descriptor_set, 4> DescriptorSets = {};
-    DescriptorSets.Count = DescriptorSetInfos.Count;
-    vtk::CreateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Data, DescriptorSetInfos.Count, DescriptorSets.Data);
+    // Mirror descriptor set infos map to store descriptor sets.
+    ctk::smap<vtk::descriptor_set, 4> DescriptorSets = {};
+    for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfos.Count; ++DescriptorSetIndex)
+    {
+        ctk::Push(&DescriptorSets, DescriptorSetInfos.Keys[DescriptorSetIndex]);
+    }
+    vtk::CreateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Values, DescriptorSetInfos.Count, DescriptorSets.Values);
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
@@ -360,9 +340,8 @@ main()
     ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
     ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexUVIndex });
-    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[0].Layout);
-    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[1].Layout);
-    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, DescriptorSets[3].Layout);
+    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, At(&DescriptorSets, "entity")->Layout);
+    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, At(&DescriptorSets, "grass_texture")->Layout);
     GraphicsPipelineConfig.VertexLayout = &VertexLayout;
     GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
     GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -415,16 +394,14 @@ main()
     ////////////////////////////////////////////////////////////
     ctk::sarray<render_entity, 4> RenderEntities = {};
     render_entity *QuadEntity = ctk::Push(&RenderEntities);
-    ctk::Push(&QuadEntity->DescriptorSets, DescriptorSets + 0);
-    ctk::Push(&QuadEntity->DescriptorSets, DescriptorSets + 1);
-    ctk::Push(&QuadEntity->DescriptorSets, DescriptorSets + 3);
+    ctk::Push(&QuadEntity->DescriptorSets, At(&DescriptorSets, "entity"));
+    ctk::Push(&QuadEntity->DescriptorSets, At(&DescriptorSets, "grass_texture"));
     QuadEntity->GraphicsPipeline = &GraphicsPipeline;
     QuadEntity->Mesh = QuadMesh;
 
     render_entity *CubeEntity = ctk::Push(&RenderEntities);
-    ctk::Push(&CubeEntity->DescriptorSets, DescriptorSets + 0);
-    ctk::Push(&CubeEntity->DescriptorSets, DescriptorSets + 2);
-    ctk::Push(&CubeEntity->DescriptorSets, DescriptorSets + 3);
+    ctk::Push(&CubeEntity->DescriptorSets, At(&DescriptorSets, "entity"));
+    ctk::Push(&CubeEntity->DescriptorSets, At(&DescriptorSets, "dirt_texture"));
     CubeEntity->GraphicsPipeline = &GraphicsPipeline;
     CubeEntity->Mesh = CubeMesh;
 

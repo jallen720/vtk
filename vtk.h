@@ -1829,11 +1829,14 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 
                     region *UniformBufferRegion = At(&UniformBuffer->Regions, UniformBufferRegionIndex);
                     WriteDescriptorSet->pBufferInfo = DescriptorBufferInfos.Data + DescriptorBufferInfos.Count;
-                    CTK_REPEAT(DescriptorInfo->Count)
+                    for(u32 DescriptorElementIndex = 0; DescriptorElementIndex < DescriptorInfo->Count; ++DescriptorElementIndex)
                     {
                         VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
                         DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
-                        DescriptorBufferInfo->offset = UniformBufferRegion->Offset + (UniformBuffer->ElementSize * _);
+
+                        // Map each element in descriptor to its UniformBuffer->ElementSize offset in uniform buffer region.
+                        DescriptorBufferInfo->offset = UniformBufferRegion->Offset + (UniformBuffer->ElementSize * DescriptorElementIndex);
+
                         DescriptorBufferInfo->range = UniformBuffer->ElementSize;
                     }
                 }
