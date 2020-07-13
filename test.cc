@@ -264,7 +264,7 @@ main()
     vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
 
     // Regions
-    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2, MEGABYTE);
+    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2 * MEGABYTE);
 
     ////////////////////////////////////////////////////////////
     /// Descriptor Set Resources
@@ -381,8 +381,8 @@ main()
         mesh *Mesh = Meshes + MeshIndex;
         u32 VertexByteCount = ctk::ByteCount(&Mesh->Vertexes);
         u32 IndexByteCount = ctk::ByteCount(&Mesh->Indexes);
-        Mesh->VertexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, VertexByteCount);
-        Mesh->IndexRegion = vtk::AllocateRegion(&DeviceBuffer, 1, IndexByteCount);
+        Mesh->VertexRegion = vtk::AllocateRegion(&DeviceBuffer, VertexByteCount);
+        Mesh->IndexRegion = vtk::AllocateRegion(&DeviceBuffer, IndexByteCount);
         vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->VertexRegion,
                                  Mesh->Vertexes.Data, VertexByteCount, 0);
         vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->IndexRegion,

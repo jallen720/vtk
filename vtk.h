@@ -1050,19 +1050,18 @@ DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
 }
 
 static region
-AllocateRegion(buffer *Buffer, u32 ElementCount, u32 ElementSize)
+AllocateRegion(buffer *Buffer, u32 Size)
 {
-    VkDeviceSize RegionSize = ElementCount * ElementSize;
-    if(Buffer->End + RegionSize > Buffer->Size)
+    if(Buffer->End + Size > Buffer->Size)
     {
         CTK_FATAL("buffer (size=%u end=%u) cannot allocate region of size %u (only %u bytes left)",
-                  Buffer->Size, Buffer->End, RegionSize, Buffer->Size - Buffer->End);
+                  Buffer->Size, Buffer->End, Size, Buffer->Size - Buffer->End);
     }
     region Region = {};
     Region.Buffer = Buffer;
     Region.Offset = Buffer->End;
-    Region.Size = RegionSize;
-    Buffer->End += RegionSize;
+    Region.Size = Size;
+    Buffer->End += Size;
     return Region;
 }
 
@@ -1671,7 +1670,7 @@ CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize Elem
     UniformBuffer.ElementSize = ElementSize;
     CTK_REPEAT(InstanceCount)
     {
-        ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount, ElementSize));
+        ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount * ElementSize));
     }
     return UniformBuffer;
 }
