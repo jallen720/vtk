@@ -24,7 +24,7 @@ namespace vtk {
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
-struct instance_config
+struct instance_info
 {
     ctk::sarray<cstr, 8> Layers;
     ctk::sarray<cstr, 8> Extensions;
@@ -38,7 +38,7 @@ struct instance
     VkDebugUtilsMessengerEXT DebugUtilsMessenger;
 };
 
-struct device_config
+struct device_info
 {
     ctk::sarray<cstr, 8> Extensions;
     VkPhysicalDeviceFeatures Features;
@@ -78,7 +78,7 @@ struct swapchain
     VkExtent2D Extent;
 };
 
-struct buffer_config
+struct buffer_info
 {
     VkDeviceSize Size;
     VkBufferUsageFlags UsageFlags;
@@ -100,7 +100,7 @@ struct region
     VkDeviceSize Offset;
 };
 
-struct image_config
+struct image_info
 {
     u32 Width;
     u32 Height;
@@ -134,7 +134,7 @@ struct subpass
     ctk::optional<VkAttachmentReference> DepthAttachmentReference;
 };
 
-struct render_pass_config
+struct render_pass_info
 {
     ctk::sarray<attachment, 4> Attachments;
     ctk::sarray<subpass, 4> Subpasses;
@@ -146,7 +146,7 @@ struct render_pass
     ctk::sarray<VkClearValue, 4> ClearValues;
 };
 
-struct framebuffer_config
+struct framebuffer_info
 {
     ctk::sarray<VkImageView, 4> Attachments;
     VkExtent2D Extent;
@@ -179,13 +179,13 @@ struct vertex_input
     u32 AttributeIndex;
 };
 
-struct descriptor_pool_config
+struct descriptor_pool_info
 {
     ctk::sarray<VkDescriptorPoolSize, 12> Sizes;
     u32 MaxSets;
 };
 
-struct graphics_pipeline_config
+struct graphics_pipeline_info
 {
     ctk::sarray<shader_module *, 4> ShaderModules;
     ctk::sarray<vertex_input, 4> VertexInputs;
@@ -223,7 +223,7 @@ struct vk_result_debug_info
     cstr Message;
 };
 
-struct device_info
+struct device_query_results
 {
     VkPhysicalDeviceProperties Properties;
     VkPhysicalDeviceFeatures Features;
@@ -477,13 +477,13 @@ CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sar
 }
 
 static void
-DeviceInfoFree(device_info *DeviceInfo)
+Free(device_query_results *DeviceQueryResults)
 {
-    Free(&DeviceInfo->Extensions);
-    Free(&DeviceInfo->SurfaceFormats);
-    Free(&DeviceInfo->SurfacePresentModes);
-    Free(&DeviceInfo->QueueFamilies);
-    *DeviceInfo = {};
+    ctk::Free(&DeviceQueryResults->Extensions);
+    ctk::Free(&DeviceQueryResults->SurfaceFormats);
+    ctk::Free(&DeviceQueryResults->SurfacePresentModes);
+    ctk::Free(&DeviceQueryResults->QueueFamilies);
+    *DeviceQueryResults = {};
 }
 
 static VkDeviceQueueCreateInfo
@@ -596,11 +596,11 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
 /// Interface
 ////////////////////////////////////////////////////////////
 static instance
-CreateInstance(instance_config *Config)
+CreateInstance(instance_info *InstanceInfo)
 {
     instance Instance = {};
-    auto *Layers = &Config->Layers;
-    auto *Extensions = &Config->Extensions;
+    auto *Layers = &InstanceInfo->Layers;
+    auto *Extensions = &InstanceInfo->Extensions;
     if(!AddOnsSupported<VkLayerProperties>(Layers, LayerName, vkEnumerateInstanceLayerProperties))
     {
         CTK_FATAL("not all requested layers supported")
@@ -611,7 +611,7 @@ CreateInstance(instance_config *Config)
         CTK_FATAL("not all requested extensions supported")
     }
 
-    if(Config->Debug)
+    if(InstanceInfo->Debug)
     {
         // Ensure add-on arrays can fit debug add-ons.
         CTK_ASSERT(Layers->Count < Layers->Size)
@@ -636,7 +636,7 @@ CreateInstance(instance_config *Config)
         DebugUtilsMessengerCreateInfo.pUserData = NULL;
 
         // Create Instance
-        Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
+        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
 
         // Create Debug Utils Messenger
         VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
@@ -646,16 +646,16 @@ CreateInstance(instance_config *Config)
     }
     else
     {
-        Instance.Handle = CreateVulkanInstance(Config->AppName, Extensions, Layers, NULL);
+        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions, Layers, NULL);
     }
     return Instance;
 }
 
 static device
-CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *Config)
+CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *DeviceInfo)
 {
     device Device = {};
-    auto *Extensions = &Config->Extensions;
+    auto *Extensions = &DeviceInfo->Extensions;
 
     ////////////////////////////////////////////////////////////
     /// Physical Device
@@ -664,7 +664,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     b32 FoundSuitableDevice = false;
     for(u32 PhysicalDeviceIndex = 0; PhysicalDeviceIndex < PhysicalDevices.Count && !FoundSuitableDevice; ++PhysicalDeviceIndex)
     {
-        device_info SelectedDeviceInfo = {};
+        device_query_results SelectedDeviceQueryResults = {};
         VkPhysicalDevice PhysicalDevice = PhysicalDevices[PhysicalDeviceIndex];
 
         ////////////////////////////////////////////////////////////
@@ -692,32 +692,32 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         // vkGetPhysicalDeviceSparseImageFormatProperties
 
         // Collect requirements data.
-        vkGetPhysicalDeviceProperties(PhysicalDevice, &SelectedDeviceInfo.Properties);
-        vkGetPhysicalDeviceFeatures(PhysicalDevice, &SelectedDeviceInfo.Features);
-        vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &SelectedDeviceInfo.MemoryProperties);
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, PlatformSurface, &SelectedDeviceInfo.SurfaceCapabilities);
-        SelectedDeviceInfo.Extensions =
+        vkGetPhysicalDeviceProperties(PhysicalDevice, &SelectedDeviceQueryResults.Properties);
+        vkGetPhysicalDeviceFeatures(PhysicalDevice, &SelectedDeviceQueryResults.Features);
+        vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &SelectedDeviceQueryResults.MemoryProperties);
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, PlatformSurface, &SelectedDeviceQueryResults.SurfaceCapabilities);
+        SelectedDeviceQueryResults.Extensions =
             LoadVkObjects<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, PhysicalDevice, (cstr)NULL);
-        SelectedDeviceInfo.SurfaceFormats =
+        SelectedDeviceQueryResults.SurfaceFormats =
             LoadVkObjects<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR, PhysicalDevice, PlatformSurface);
-        SelectedDeviceInfo.SurfacePresentModes =
+        SelectedDeviceQueryResults.SurfacePresentModes =
             LoadVkObjects<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, PhysicalDevice, PlatformSurface);
-        SelectedDeviceInfo.QueueFamilies =
+        SelectedDeviceQueryResults.QueueFamilies =
             LoadVkObjects<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, PhysicalDevice);
 
         // Find queue family indexes.
-        for(u32 QueueFamilyIndex = 0; QueueFamilyIndex < SelectedDeviceInfo.QueueFamilies.Count; ++QueueFamilyIndex)
+        for(u32 QueueFamilyIndex = 0; QueueFamilyIndex < SelectedDeviceQueryResults.QueueFamilies.Count; ++QueueFamilyIndex)
         {
-            VkQueueFamilyProperties *QueueFamily = SelectedDeviceInfo.QueueFamilies + QueueFamilyIndex;
+            VkQueueFamilyProperties *QueueFamily = SelectedDeviceQueryResults.QueueFamilies + QueueFamilyIndex;
             if(QueueFamily->queueFlags & VK_QUEUE_GRAPHICS_BIT)
             {
-                SelectedDeviceInfo.QueueFamilyIndexes.Graphics = QueueFamilyIndex;
+                SelectedDeviceQueryResults.QueueFamilyIndexes.Graphics = QueueFamilyIndex;
             }
             VkBool32 PresentationSupported = VK_FALSE;
             vkGetPhysicalDeviceSurfaceSupportKHR(PhysicalDevice, QueueFamilyIndex, PlatformSurface, &PresentationSupported);
             if(PresentationSupported == VK_TRUE)
             {
-                SelectedDeviceInfo.QueueFamilyIndexes.Present = QueueFamilyIndex;
+                SelectedDeviceQueryResults.QueueFamilyIndexes.Present = QueueFamilyIndex;
             }
         }
 
@@ -727,7 +727,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
 
         // Check if device has requested features.
         #define VTK_INTERNAL_DEVICE_FEATURE_CHECK(FEATURE) \
-            if(Config->Features.FEATURE && !SelectedDeviceInfo.Features.FEATURE) \
+            if(DeviceInfo->Features.FEATURE && !SelectedDeviceQueryResults.Features.FEATURE) \
             { \
                 DeviceFeaturesSupported = false; \
                 ctk::Error("requested device feature \"" #FEATURE "\" not supported"); \
@@ -791,31 +791,31 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
         VTK_INTERNAL_DEVICE_FEATURE_CHECK(inheritedQueries)
 
         // Check if physical device meets other requirements.
-        b32 SwapchainsSupported = SelectedDeviceInfo.SurfaceFormats.Count != 0 &&
-                                  SelectedDeviceInfo.SurfacePresentModes.Count != 0;
-        if(SelectedDeviceInfo.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-           SelectedDeviceInfo.QueueFamilyIndexes.Graphics != VTK_UNSET_INDEX &&
-           SelectedDeviceInfo.QueueFamilyIndexes.Present != VTK_UNSET_INDEX &&
-           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceInfo.Extensions, ExtensionName);
+        b32 SwapchainsSupported = SelectedDeviceQueryResults.SurfaceFormats.Count != 0 &&
+                                  SelectedDeviceQueryResults.SurfacePresentModes.Count != 0;
+        if(SelectedDeviceQueryResults.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+           SelectedDeviceQueryResults.QueueFamilyIndexes.Graphics != VTK_UNSET_INDEX &&
+           SelectedDeviceQueryResults.QueueFamilyIndexes.Present != VTK_UNSET_INDEX &&
+           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceQueryResults.Extensions, ExtensionName);
            DeviceFeaturesSupported &&
            SwapchainsSupported)
         {
-            ctk::Info("physical device \"%s\" satisfies all requirements", SelectedDeviceInfo.Properties.deviceName);
+            ctk::Info("physical device \"%s\" satisfies all requirements", SelectedDeviceQueryResults.Properties.deviceName);
             FoundSuitableDevice = true;
 
             // Initialize physical device with selected device info.
             Device.Physical = PhysicalDevice;
-            Device.MemoryProperties = SelectedDeviceInfo.MemoryProperties;
-            Device.QueueFamilyIndexes = SelectedDeviceInfo.QueueFamilyIndexes;
-            Device.SurfaceCapabilities = SelectedDeviceInfo.SurfaceCapabilities;
-            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceInfo.SurfaceFormats);
-            Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceInfo.SurfacePresentModes);
+            Device.MemoryProperties = SelectedDeviceQueryResults.MemoryProperties;
+            Device.QueueFamilyIndexes = SelectedDeviceQueryResults.QueueFamilyIndexes;
+            Device.SurfaceCapabilities = SelectedDeviceQueryResults.SurfaceCapabilities;
+            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceQueryResults.SurfaceFormats);
+            Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceQueryResults.SurfacePresentModes);
         }
         else
         {
-            ctk::Error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceInfo.Properties.deviceName);
+            ctk::Error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceQueryResults.Properties.deviceName);
         }
-        DeviceInfoFree(&SelectedDeviceInfo);
+        Free(&SelectedDeviceQueryResults);
     }
     if(!FoundSuitableDevice)
     {
@@ -841,7 +841,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     LogicalDeviceCreateInfo.ppEnabledLayerNames = NULL;
     LogicalDeviceCreateInfo.enabledExtensionCount = Extensions->Count;
     LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
-    LogicalDeviceCreateInfo.pEnabledFeatures = &Config->Features;
+    LogicalDeviceCreateInfo.pEnabledFeatures = &DeviceInfo->Features;
     ValidateVkResult(vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical),
                      "vkCreateDevice", "failed to create logical device");
 
@@ -851,7 +851,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_config *C
     vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Present, QUEUE_INDEX, &Device.PresentQueue);
 
     // Cleanup
-    Free(&PhysicalDevices);
+    ctk::Free(&PhysicalDevices);
 
     return Device;
 }
@@ -961,7 +961,7 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     Swapchain.Extent = Device->SurfaceCapabilities.currentExtent;
 
     // Cleanup
-    Free(&Images);
+    ctk::Free(&Images);
 
     return Swapchain;
 }
@@ -1016,16 +1016,16 @@ AllocateDeviceMemory(device *Device, VkMemoryRequirements *MemoryRequirements, V
 }
 
 static buffer
-CreateBuffer(device *Device, buffer_config *Config)
+CreateBuffer(device *Device, buffer_info *BufferInfo)
 {
     buffer Buffer = {};
-    Buffer.Size = Config->Size;
+    Buffer.Size = BufferInfo->Size;
 
     // Buffer Creation
     VkBufferCreateInfo BufferCreateInfo = {};
     BufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    BufferCreateInfo.size = Config->Size;
-    BufferCreateInfo.usage = Config->UsageFlags;
+    BufferCreateInfo.size = BufferInfo->Size;
+    BufferCreateInfo.usage = BufferInfo->UsageFlags;
     BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     BufferCreateInfo.queueFamilyIndexCount = 0;
     BufferCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
@@ -1035,7 +1035,7 @@ CreateBuffer(device *Device, buffer_config *Config)
     // Memory Allocation & Binding
     VkMemoryRequirements MemoryRequirements = {};
     vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
-    Buffer.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, Config->MemoryPropertyFlags);
+    Buffer.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, BufferInfo->MemoryPropertyFlags);
     ValidateVkResult(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
                      "vkBindBufferMemory", "failed to bind buffer memory");
 
@@ -1066,12 +1066,12 @@ AllocateRegion(buffer *Buffer, u32 Size)
 }
 
 static image
-CreateImage(device *Device, image_config *Config)
+CreateImage(device *Device, image_info *ImageInfo)
 {
     image Image = {};
-    Image.Width = Config->Width;
-    Image.Height = Config->Height;
-    Image.Format = Config->Format;
+    Image.Width = ImageInfo->Width;
+    Image.Height = ImageInfo->Height;
+    Image.Format = ImageInfo->Format;
 
     ////////////////////////////////////////////////////////////
     /// Vulkan Image
@@ -1080,15 +1080,15 @@ CreateImage(device *Device, image_config *Config)
     ImageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     ImageCreateInfo.flags = 0;
     ImageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-    ImageCreateInfo.format = Config->Format;
-    ImageCreateInfo.extent.width = Config->Width;
-    ImageCreateInfo.extent.height = Config->Height;
+    ImageCreateInfo.format = ImageInfo->Format;
+    ImageCreateInfo.extent.width = ImageInfo->Width;
+    ImageCreateInfo.extent.height = ImageInfo->Height;
     ImageCreateInfo.extent.depth = 1;
     ImageCreateInfo.mipLevels = 1;
     ImageCreateInfo.arrayLayers = 1;
     ImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    ImageCreateInfo.tiling = Config->Tiling;
-    ImageCreateInfo.usage = Config->UsageFlags;
+    ImageCreateInfo.tiling = ImageInfo->Tiling;
+    ImageCreateInfo.usage = ImageInfo->UsageFlags;
     ImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ImageCreateInfo.queueFamilyIndexCount = 0;
     ImageCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
@@ -1100,14 +1100,14 @@ CreateImage(device *Device, image_config *Config)
     ////////////////////////////////////////////////////////////
     VkMemoryRequirements MemoryRequirements = {};
     vkGetImageMemoryRequirements(Device->Logical, Image.Handle, &MemoryRequirements);
-    Image.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, Config->MemoryPropertyFlags);
+    Image.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, ImageInfo->MemoryPropertyFlags);
     ValidateVkResult(vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0),
                      "vkBindImageMemory", "failed to bind image memory");
 
     ////////////////////////////////////////////////////////////
     /// View
     ////////////////////////////////////////////////////////////
-    Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, Config->AspectMask);
+    Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, ImageInfo->AspectMask);
 
     return Image;
 }
@@ -1129,7 +1129,7 @@ LoadTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cs
     }
 
     // Create texture image.
-    image_config TextureImageConfig = {};
+    image_info TextureImageConfig = {};
     TextureImageConfig.Width = ImageWidth;
     TextureImageConfig.Height = ImageHeight;
     TextureImageConfig.Format = VK_FORMAT_R8G8B8A8_UNORM; // Since stbi_load() used STBI_rgb_alpha.
@@ -1192,7 +1192,7 @@ LoadTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cs
 }
 
 static render_pass
-CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
+CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
 
@@ -1200,9 +1200,9 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     /// Attachments
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkAttachmentDescription, 4> AttachmentDescriptions = {};
-    for(u32 AttachmentIndex = 0; AttachmentIndex < Config->Attachments.Count; ++AttachmentIndex)
+    for(u32 AttachmentIndex = 0; AttachmentIndex < RenderPassInfo->Attachments.Count; ++AttachmentIndex)
     {
-        attachment *Attachment = Config->Attachments + AttachmentIndex;
+        attachment *Attachment = RenderPassInfo->Attachments + AttachmentIndex;
         ctk::Push(&AttachmentDescriptions, Attachment->Description);
 
         // Store clear value if attachment uses a clear load operation.
@@ -1216,9 +1216,9 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
     /// Subpasses
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkSubpassDescription, 4> SubpassDescriptions = {};
-    for(u32 SubpassIndex = 0; SubpassIndex < Config->Subpasses.Count; ++SubpassIndex)
+    for(u32 SubpassIndex = 0; SubpassIndex < RenderPassInfo->Subpasses.Count; ++SubpassIndex)
     {
-        subpass *Subpass = At(&Config->Subpasses, SubpassIndex);
+        subpass *Subpass = At(&RenderPassInfo->Subpasses, SubpassIndex);
         VkSubpassDescription *SubpassDescription = ctk::Push(&SubpassDescriptions);
         SubpassDescription->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         SubpassDescription->inputAttachmentCount = 0;
@@ -1257,16 +1257,16 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_config *Config)
 }
 
 static VkFramebuffer
-CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_config *Config)
+CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_info *FramebufferInfo)
 {
     VkFramebufferCreateInfo FramebufferCreateInfo = {};
     FramebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     FramebufferCreateInfo.renderPass = RenderPass;
-    FramebufferCreateInfo.attachmentCount = Config->Attachments.Count;
-    FramebufferCreateInfo.pAttachments = Config->Attachments.Data;
-    FramebufferCreateInfo.width = Config->Extent.width;
-    FramebufferCreateInfo.height = Config->Extent.height;
-    FramebufferCreateInfo.layers = Config->Layers;
+    FramebufferCreateInfo.attachmentCount = FramebufferInfo->Attachments.Count;
+    FramebufferCreateInfo.pAttachments = FramebufferInfo->Attachments.Data;
+    FramebufferCreateInfo.width = FramebufferInfo->Extent.width;
+    FramebufferCreateInfo.height = FramebufferInfo->Extent.height;
+    FramebufferCreateInfo.layers = FramebufferInfo->Layers;
     VkFramebuffer Framebuffer = VK_NULL_HANDLE;
     ValidateVkResult(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
                      "vkCreateFramebuffer", "failed to create framebuffer");
@@ -1289,7 +1289,7 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
                      "vkCreateShaderModule", "failed to create shader module");
 
     // Cleanup
-    Free(&ShaderByteCode);
+    ctk::Free(&ShaderByteCode);
 
     return ShaderModule;
 }
@@ -1313,7 +1313,7 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
 }
 
 static graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_config *Config)
+CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
 {
     graphics_pipeline GraphicsPipeline = {};
 
@@ -1321,9 +1321,9 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     /// Shader Stages
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkPipelineShaderStageCreateInfo, 4> ShaderStages = {};
-    for(u32 ShaderModuleIndex = 0; ShaderModuleIndex < Config->ShaderModules.Count; ++ShaderModuleIndex)
+    for(u32 ShaderModuleIndex = 0; ShaderModuleIndex < GraphicsPipelineInfo->ShaderModules.Count; ++ShaderModuleIndex)
     {
-        shader_module *ShaderModule = Config->ShaderModules[ShaderModuleIndex];
+        shader_module *ShaderModule = GraphicsPipelineInfo->ShaderModules[ShaderModuleIndex];
 
         VkPipelineShaderStageCreateInfo *ShaderStageCreateInfo = ctk::Push(&ShaderStages);
         ShaderStageCreateInfo->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1338,10 +1338,10 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     /// Vertex Input State
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
-    for(u32 InputIndex = 0; InputIndex < Config->VertexInputs.Count; ++InputIndex)
+    for(u32 InputIndex = 0; InputIndex < GraphicsPipelineInfo->VertexInputs.Count; ++InputIndex)
     {
-        vertex_input *VertexInput = At(&Config->VertexInputs, InputIndex);
-        vertex_attribute *VertexAttribute = Config->VertexLayout->Attributes + VertexInput->AttributeIndex;
+        vertex_input *VertexInput = At(&GraphicsPipelineInfo->VertexInputs, InputIndex);
+        vertex_attribute *VertexAttribute = GraphicsPipelineInfo->VertexLayout->Attributes + VertexInput->AttributeIndex;
 
         VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexAttributeDescriptions);
         AttributeDescription->location = VertexInput->Location;
@@ -1353,7 +1353,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
     VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexBindingDescriptions);
     BindingDescription->binding = 0;
-    BindingDescription->stride = Config->VertexLayout->Size;
+    BindingDescription->stride = GraphicsPipelineInfo->VertexLayout->Size;
     BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     VkPipelineVertexInputStateCreateInfo VertexInputState = {};
@@ -1368,7 +1368,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
     InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyState.topology = Config->PrimitiveTopology;
+    InputAssemblyState.topology = GraphicsPipelineInfo->PrimitiveTopology;
     InputAssemblyState.primitiveRestartEnable = VK_FALSE;
 
     ////////////////////////////////////////////////////////////
@@ -1377,8 +1377,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     VkViewport Viewport = {};
     Viewport.x = 0.0f;
     Viewport.y = 0.0f;
-    Viewport.width = (f32)Config->ViewportExtent.width;
-    Viewport.height = (f32)Config->ViewportExtent.height;
+    Viewport.width = (f32)GraphicsPipelineInfo->ViewportExtent.width;
+    Viewport.height = (f32)GraphicsPipelineInfo->ViewportExtent.height;
     Viewport.minDepth = 0.0f;
     Viewport.maxDepth = 1.0f;
 
@@ -1401,8 +1401,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     VkPipelineDepthStencilStateCreateInfo DepthStencilState = {};
     DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    DepthStencilState.depthTestEnable = Config->DepthTesting;
-    DepthStencilState.depthWriteEnable = Config->DepthTesting;
+    DepthStencilState.depthTestEnable = GraphicsPipelineInfo->DepthTesting;
+    DepthStencilState.depthWriteEnable = GraphicsPipelineInfo->DepthTesting;
     DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
     DepthStencilState.depthBoundsTestEnable = VK_FALSE;
     DepthStencilState.stencilTestEnable = VK_FALSE;
@@ -1465,8 +1465,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     ////////////////////////////////////////////////////////////
     VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
     LayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    LayoutCreateInfo.setLayoutCount = Config->DescriptorSetLayouts.Count;
-    LayoutCreateInfo.pSetLayouts = Config->DescriptorSetLayouts.Data;
+    LayoutCreateInfo.setLayoutCount = GraphicsPipelineInfo->DescriptorSetLayouts.Count;
+    LayoutCreateInfo.pSetLayouts = GraphicsPipelineInfo->DescriptorSetLayouts.Data;
     LayoutCreateInfo.pushConstantRangeCount = 0;
     LayoutCreateInfo.pPushConstantRanges = NULL;
     ValidateVkResult(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),

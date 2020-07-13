@@ -126,11 +126,11 @@ main()
     // Instance
     u32 GLFWExtensionCount = 0;
     cstr *GLFWExtensions = glfwGetRequiredInstanceExtensions(&GLFWExtensionCount);
-    vtk::instance_config InstanceConfig = {};
-    ctk::Push(&InstanceConfig.Extensions, GLFWExtensions, GLFWExtensionCount);
-    InstanceConfig.Debug = ctk::B32(&Config, "debug");
-    InstanceConfig.AppName = ctk::CStr(&Config, "app_name");
-    vtk::instance Instance = vtk::CreateInstance(&InstanceConfig);
+    vtk::instance_info InstanceInfo = {};
+    ctk::Push(&InstanceInfo.Extensions, GLFWExtensions, GLFWExtensionCount);
+    InstanceInfo.Debug = ctk::B32(&Config, "debug");
+    InstanceInfo.AppName = ctk::CStr(&Config, "app_name");
+    vtk::instance Instance = vtk::CreateInstance(&InstanceInfo);
 
     // Platform Surface
     VkSurfaceKHR PlatformSurface = {};
@@ -138,12 +138,12 @@ main()
     vtk::ValidateVkResult(Result, "glfwCreateWindowSurface", "failed to create GLFW surface");
 
     // Device
-    vtk::device_config DeviceConfig = {};
-    Push(&DeviceConfig.Extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME); // Swapchains required for rendering.
-    DeviceConfig.Features.geometryShader = VK_TRUE;
-    DeviceConfig.Features.samplerAnisotropy = VK_TRUE;
-    // DeviceConfig.Features.vertexPipelineStoresAndAtomics = VK_TRUE;
-    vtk::device Device = vtk::CreateDevice(Instance.Handle, PlatformSurface, &DeviceConfig);
+    vtk::device_info DeviceInfo = {};
+    Push(&DeviceInfo.Extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME); // Swapchains required for rendering.
+    DeviceInfo.Features.geometryShader = VK_TRUE;
+    DeviceInfo.Features.samplerAnisotropy = VK_TRUE;
+    // DeviceInfo.Features.vertexPipelineStoresAndAtomics = VK_TRUE;
+    vtk::device Device = vtk::CreateDevice(Instance.Handle, PlatformSurface, &DeviceInfo);
 
     // Swapchain
     vtk::swapchain Swapchain = vtk::CreateSwapchain(&Device, PlatformSurface);
@@ -159,26 +159,26 @@ main()
     ////////////////////////////////////////////////////////////
     /// Depth Image
     ////////////////////////////////////////////////////////////
-    vtk::image_config DepthImageConfig = {};
-    DepthImageConfig.Width = Swapchain.Extent.width;
-    DepthImageConfig.Height = Swapchain.Extent.height;
-    DepthImageConfig.Format = vtk::FindDepthImageFormat(Device.Physical);
-    DepthImageConfig.Tiling = VK_IMAGE_TILING_OPTIMAL;
-    DepthImageConfig.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    DepthImageConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    DepthImageConfig.AspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    vtk::image DepthImage = vtk::CreateImage(&Device, &DepthImageConfig);
+    vtk::image_info DepthImageInfo = {};
+    DepthImageInfo.Width = Swapchain.Extent.width;
+    DepthImageInfo.Height = Swapchain.Extent.height;
+    DepthImageInfo.Format = vtk::FindDepthImageFormat(Device.Physical);
+    DepthImageInfo.Tiling = VK_IMAGE_TILING_OPTIMAL;
+    DepthImageInfo.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    DepthImageInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    DepthImageInfo.AspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    vtk::image DepthImage = vtk::CreateImage(&Device, &DepthImageInfo);
     vtk::TransitionImageLayout(&Device, GraphicsCommandPool, &DepthImage,
                                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     ////////////////////////////////////////////////////////////
     /// Render Pass
     ////////////////////////////////////////////////////////////
-    vtk::render_pass_config RenderPassConfig = {};
+    vtk::render_pass_info RenderPassInfo = {};
 
     // Attachments
-    u32 ColorAttachmentIndex = RenderPassConfig.Attachments.Count;
-    vtk::attachment *ColorAttachment = ctk::Push(&RenderPassConfig.Attachments);
+    u32 ColorAttachmentIndex = RenderPassInfo.Attachments.Count;
+    vtk::attachment *ColorAttachment = ctk::Push(&RenderPassInfo.Attachments);
     ColorAttachment->Description.format = Swapchain.ImageFormat;
     ColorAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
     ColorAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
@@ -189,8 +189,8 @@ main()
     ColorAttachment->Description.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     ColorAttachment->ClearValue = { 0.04f, 0.04f, 0.04f, 1.0f };
 
-    u32 DepthAttachmentIndex = RenderPassConfig.Attachments.Count;
-    vtk::attachment *DepthAttachment = ctk::Push(&RenderPassConfig.Attachments);
+    u32 DepthAttachmentIndex = RenderPassInfo.Attachments.Count;
+    vtk::attachment *DepthAttachment = ctk::Push(&RenderPassInfo.Attachments);
     DepthAttachment->Description.format = DepthImage.Format;
     DepthAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
     DepthAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
@@ -202,7 +202,7 @@ main()
     DepthAttachment->ClearValue = { 1.0f, 0.0f };
 
     // Subpasses
-    vtk::subpass *Subpass = ctk::Push(&RenderPassConfig.Subpasses);
+    vtk::subpass *Subpass = ctk::Push(&RenderPassInfo.Subpasses);
 
     VkAttachmentReference *ColorAttachmentReference = ctk::Push(&Subpass->ColorAttachmentReferences);
     ColorAttachmentReference->attachment = ColorAttachmentIndex;
@@ -213,18 +213,18 @@ main()
     Subpass->DepthAttachmentReference.Value.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     // Creation
-    vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, &RenderPassConfig);
+    vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, &RenderPassInfo);
 
     // Framebuffers
     ctk::sarray<VkFramebuffer, 4> Framebuffers = {};
     for(u32 FramebufferIndex = 0; FramebufferIndex < Swapchain.Images.Count; ++FramebufferIndex)
     {
-        vtk::framebuffer_config FramebufferConfig = {};
-        ctk::Push(&FramebufferConfig.Attachments, Swapchain.Images[FramebufferIndex].View);
-        ctk::Push(&FramebufferConfig.Attachments, DepthImage.View);
-        FramebufferConfig.Extent = Swapchain.Extent;
-        FramebufferConfig.Layers = 1;
-        ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.Handle, &FramebufferConfig));
+        vtk::framebuffer_info FramebufferInfo = {};
+        ctk::Push(&FramebufferInfo.Attachments, Swapchain.Images[FramebufferIndex].View);
+        ctk::Push(&FramebufferInfo.Attachments, DepthImage.View);
+        FramebufferInfo.Extent = Swapchain.Extent;
+        FramebufferInfo.Layers = 1;
+        ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.Handle, &FramebufferInfo));
     }
 
     // Command Buffers
@@ -251,17 +251,17 @@ main()
     ////////////////////////////////////////////////////////////
 
     // Buffers
-    vtk::buffer_config HostBufferConfig = {};
-    HostBufferConfig.Size = 10 * MEGABYTE;
-    HostBufferConfig.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    HostBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferConfig);
+    vtk::buffer_info HostBufferInfo = {};
+    HostBufferInfo.Size = 10 * MEGABYTE;
+    HostBufferInfo.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    HostBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferInfo);
 
-    vtk::buffer_config DeviceBufferConfig = {};
-    DeviceBufferConfig.Size = 10 * MEGABYTE;
-    DeviceBufferConfig.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    DeviceBufferConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferConfig);
+    vtk::buffer_info DeviceBufferInfo = {};
+    DeviceBufferInfo.Size = 10 * MEGABYTE;
+    DeviceBufferInfo.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    DeviceBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferInfo);
 
     // Regions
     vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2 * MEGABYTE);
@@ -335,18 +335,18 @@ main()
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
     ////////////////////////////////////////////////////////////
-    vtk::graphics_pipeline_config GraphicsPipelineConfig = {};
-    ctk::Push(&GraphicsPipelineConfig.ShaderModules, &VertexShader);
-    ctk::Push(&GraphicsPipelineConfig.ShaderModules, &FragmentShader);
-    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 0, 0, VertexPositionIndex });
-    ctk::Push(&GraphicsPipelineConfig.VertexInputs, { 1, 0, VertexUVIndex });
-    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, At(&DescriptorSets, "entity")->Layout);
-    ctk::Push(&GraphicsPipelineConfig.DescriptorSetLayouts, At(&DescriptorSets, "grass_texture")->Layout);
-    GraphicsPipelineConfig.VertexLayout = &VertexLayout;
-    GraphicsPipelineConfig.ViewportExtent = Swapchain.Extent;
-    GraphicsPipelineConfig.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    GraphicsPipelineConfig.DepthTesting = VK_TRUE;
-    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineConfig);
+    vtk::graphics_pipeline_info GraphicsPipelineInfo = {};
+    ctk::Push(&GraphicsPipelineInfo.ShaderModules, &VertexShader);
+    ctk::Push(&GraphicsPipelineInfo.ShaderModules, &FragmentShader);
+    ctk::Push(&GraphicsPipelineInfo.VertexInputs, { 0, 0, VertexPositionIndex });
+    ctk::Push(&GraphicsPipelineInfo.VertexInputs, { 1, 0, VertexUVIndex });
+    ctk::Push(&GraphicsPipelineInfo.DescriptorSetLayouts, At(&DescriptorSets, "entity")->Layout);
+    ctk::Push(&GraphicsPipelineInfo.DescriptorSetLayouts, At(&DescriptorSets, "grass_texture")->Layout);
+    GraphicsPipelineInfo.VertexLayout = &VertexLayout;
+    GraphicsPipelineInfo.ViewportExtent = Swapchain.Extent;
+    GraphicsPipelineInfo.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipelineInfo.DepthTesting = VK_TRUE;
+    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineInfo);
 
     ////////////////////////////////////////////////////////////
     /// Data
