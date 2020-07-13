@@ -401,19 +401,19 @@ ExtensionName(VkExtensionProperties *Properties)
     return Properties->extensionName;
 }
 
-template<typename properties, typename name_selector, u32 size>
+template<typename properties, typename name_selector>
 static b32
-AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
+AddOnsSupported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
 {
     b32 AllSupported = true;
-    for(u32 AddOnIndex = 0; AddOnIndex < AddOnNames->Count; ++AddOnIndex)
+    for(u32 AddOnIndex = 0; AddOnIndex < AddOnCount; ++AddOnIndex)
     {
         b32 Supported = false;
-        cstr AddOnName = *At(AddOnNames, AddOnIndex);
+        cstr AddOn = AddOns[AddOnIndex];
         for(u32 SupportedAddOnsIndex = 0; SupportedAddOnsIndex < SupportedAddOns->Count; ++SupportedAddOnsIndex)
         {
             cstr SupportedAddOnName = NameSelector(At(SupportedAddOns, SupportedAddOnsIndex));
-            if(ctk::StringEqual(AddOnName, SupportedAddOnName))
+            if(ctk::StringEqual(AddOn, SupportedAddOnName))
             {
                 Supported = true;
                 break;
@@ -422,18 +422,18 @@ AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, ctk::array<properties> *Sup
         if(!Supported)
         {
             AllSupported = false;
-            ctk::Error("add-on \"%s\" is not supported", AddOnName);
+            ctk::Error("add-on \"%s\" is not supported", AddOn);
         }
     }
     return AllSupported;
 }
 
-template<typename properties, typename name_selector, typename loader, u32 size, typename ...args>
+template<typename properties, typename name_selector, typename loader, typename ...args>
 static b32
-AddOnsSupported(ctk::sarray<cstr, size> *AddOnNames, name_selector NameSelector, loader Loader, args... Args)
+AddOnsSupported(cstr *AddOns, u32 AddOnCount, name_selector NameSelector, loader Loader, args... Args)
 {
     auto SupportedAddOns = LoadVkObjects<properties>(Loader, Args...);
-    b32 AllSupported = AddOnsSupported<properties>(AddOnNames, &SupportedAddOns, NameSelector);
+    b32 AllSupported = AddOnsSupported<properties>(AddOns, AddOnCount, &SupportedAddOns, NameSelector);
     ctk::Free(&SupportedAddOns);
     return AllSupported;
 }
@@ -448,9 +448,8 @@ ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
     }
 }
 
-template<u32 size>
 static VkInstance
-CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sarray<cstr, size> *Layers,
+CreateVulkanInstance(cstr AppName, cstr *Extensions, u32 ExtensionCount, cstr *Layers, u32 LayerCount,
                      VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
 {
     VkApplicationInfo AppInfo = {};
@@ -467,10 +466,10 @@ CreateVulkanInstance(cstr AppName, ctk::sarray<cstr, size> *Extensions, ctk::sar
     InstanceCreateInfo.pNext = DebugUtilsMessengerCreateInfo;
     InstanceCreateInfo.flags = 0;
     InstanceCreateInfo.pApplicationInfo = &AppInfo;
-    InstanceCreateInfo.enabledLayerCount = Layers->Count;
-    InstanceCreateInfo.ppEnabledLayerNames = Layers->Data;
-    InstanceCreateInfo.enabledExtensionCount = Extensions->Count;
-    InstanceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
+    InstanceCreateInfo.enabledLayerCount = LayerCount;
+    InstanceCreateInfo.ppEnabledLayerNames = Layers;
+    InstanceCreateInfo.enabledExtensionCount = ExtensionCount;
+    InstanceCreateInfo.ppEnabledExtensionNames = Extensions;
     VkInstance Instance = VK_NULL_HANDLE;
     ValidateVkResult(vkCreateInstance(&InstanceCreateInfo, NULL, &Instance), "vkCreateInstance", "failed to create Vulkan instance");
     return Instance;
@@ -601,12 +600,13 @@ CreateInstance(instance_info *InstanceInfo)
     instance Instance = {};
     auto *Layers = &InstanceInfo->Layers;
     auto *Extensions = &InstanceInfo->Extensions;
-    if(!AddOnsSupported<VkLayerProperties>(Layers, LayerName, vkEnumerateInstanceLayerProperties))
+    if(!AddOnsSupported<VkLayerProperties>(Layers->Data, Layers->Count, LayerName, vkEnumerateInstanceLayerProperties))
     {
         CTK_FATAL("not all requested layers supported")
     }
 
-    if(!AddOnsSupported<VkExtensionProperties>(Extensions, ExtensionName, vkEnumerateInstanceExtensionProperties, (cstr)NULL))
+    if(!AddOnsSupported<VkExtensionProperties>(Extensions->Data, Extensions->Count, ExtensionName, vkEnumerateInstanceExtensionProperties,
+                                               (cstr)NULL))
     {
         CTK_FATAL("not all requested extensions supported")
     }
@@ -636,7 +636,8 @@ CreateInstance(instance_info *InstanceInfo)
         DebugUtilsMessengerCreateInfo.pUserData = NULL;
 
         // Create Instance
-        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions, Layers, &DebugUtilsMessengerCreateInfo);
+        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
+                                               &DebugUtilsMessengerCreateInfo);
 
         // Create Debug Utils Messenger
         VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
@@ -646,7 +647,8 @@ CreateInstance(instance_info *InstanceInfo)
     }
     else
     {
-        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions, Layers, NULL);
+        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
+                                               NULL);
     }
     return Instance;
 }
@@ -796,7 +798,8 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
         if(SelectedDeviceQueryResults.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
            SelectedDeviceQueryResults.QueueFamilyIndexes.Graphics != VTK_UNSET_INDEX &&
            SelectedDeviceQueryResults.QueueFamilyIndexes.Present != VTK_UNSET_INDEX &&
-           AddOnsSupported<VkExtensionProperties>(Extensions, &SelectedDeviceQueryResults.Extensions, ExtensionName);
+           AddOnsSupported<VkExtensionProperties>(Extensions->Data, Extensions->Count, &SelectedDeviceQueryResults.Extensions,
+                                                  ExtensionName);
            DeviceFeaturesSupported &&
            SwapchainsSupported)
         {
@@ -1493,11 +1496,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     GraphicsPipelineCreateInfo.subpass = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex = -1;
-    ValidateVkResult(vkCreateGraphicsPipelines(LogicalDevice,
-                                               VK_NULL_HANDLE, // Pipeline Cache
-                                               1,
-                                               &GraphicsPipelineCreateInfo,
-                                               NULL, // Allocation Callbacks
+    ValidateVkResult(vkCreateGraphicsPipelines(LogicalDevice, VK_NULL_HANDLE, 1, &GraphicsPipelineCreateInfo, NULL,
                                                &GraphicsPipeline.Handle),
                      "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
 
