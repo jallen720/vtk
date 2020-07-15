@@ -1117,7 +1117,7 @@ CreateImage(device *Device, image_info *ImageInfo)
 }
 
 static texture
-LoadTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
+CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
 {
     texture Texture = {};
 
@@ -1538,7 +1538,7 @@ WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSi
 
 static void
 WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
-                   void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
+                    void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
     if(OffsetIntoRegion + Size > Region->Size)
     {

@@ -235,9 +235,9 @@ main()
     /// Shader Modules
     ////////////////////////////////////////////////////////////
     vtk::shader_module VertexShader =
-        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        vtk::LoadShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
     vtk::shader_module FragmentShader =
-        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        vtk::LoadShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     ////////////////////////////////////////////////////////////
     /// Vertex Layout
@@ -276,7 +276,7 @@ main()
     // Textures
     vtk::texture_info GrassTextureInfo = {};
     GrassTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture GrassTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
+    vtk::texture GrassTexture = vtk::CreateTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
                                                  &GrassTextureInfo);
     vtk::texture_info DirtTextureInfo = {};
     DirtTextureInfo.Filter = VK_FILTER_NEAREST;
