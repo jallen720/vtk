@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC
 #include <stb/stb_image.h>
 
 #include "ctk/ctk.h"
@@ -1897,7 +1898,7 @@ GetVkDescriptorType(cstr Name)
         // CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR),
         CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV),
     };
-    auto DescriptorType = FindPair(DESCRIPTOR_TYPES, CTK_ARRAY_COUNT(DESCRIPTOR_TYPES), Name);
+    auto DescriptorType = ctk::FindPair(DESCRIPTOR_TYPES, CTK_ARRAY_COUNT(DESCRIPTOR_TYPES), Name, ctk::StringEqual);
     if(!DescriptorType)
     {
         CTK_FATAL("failed to find VkDescriptorType type for \"%s\"", Name)
@@ -1933,7 +1934,7 @@ GetVkShaderStageFlagBits(cstr Name)
         CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_INTERSECTION_BIT_NV),
         CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CALLABLE_BIT_NV),
     };
-    auto ShaderStage = FindPair(SHADER_STAGES, CTK_ARRAY_COUNT(SHADER_STAGES), Name);
+    auto ShaderStage = ctk::FindPair(SHADER_STAGES, CTK_ARRAY_COUNT(SHADER_STAGES), Name, ctk::StringEqual);
     if(!ShaderStage)
     {
         CTK_FATAL("failed to find VkShaderStageFlagBits for \"%s\"", Name)
@@ -1949,7 +1950,7 @@ GetVkBool32(cstr Name)
         CTK_VALUE_NAME_PAIR(VK_TRUE),
         CTK_VALUE_NAME_PAIR(VK_FALSE),
     };
-    auto VkBool = FindPair(BOOLS, CTK_ARRAY_COUNT(BOOLS), Name);
+    auto VkBool = ctk::FindPair(BOOLS, CTK_ARRAY_COUNT(BOOLS), Name, ctk::StringEqual);
     if(!VkBool)
     {
         CTK_FATAL("failed to find VkBool32 for \"%s\"", Name)
@@ -1974,12 +1975,28 @@ GetVkPrimitiveTopology(cstr Name)
         CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY),
         CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST),
     };
-    auto PrimitiveTopology = FindPair(PRIMITIVE_TOPOLOGIES, CTK_ARRAY_COUNT(PRIMITIVE_TOPOLOGIES), Name);
+    auto PrimitiveTopology = ctk::FindPair(PRIMITIVE_TOPOLOGIES, CTK_ARRAY_COUNT(PRIMITIVE_TOPOLOGIES), Name, ctk::StringEqual);
     if(!PrimitiveTopology)
     {
         CTK_FATAL("failed to find VkPrimitiveTopology for \"%s\"", Name)
     }
     return PrimitiveTopology->Value;
+}
+
+static VkFilter
+GetVkFilter(cstr Name)
+{
+    static ctk::pair<cstr, VkFilter> FILTERS[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_FILTER_NEAREST),
+        CTK_VALUE_NAME_PAIR(VK_FILTER_LINEAR),
+    };
+    auto Filter = ctk::FindPair(FILTERS, CTK_ARRAY_COUNT(FILTERS), Name, ctk::StringEqual);
+    if(!Filter)
+    {
+        CTK_FATAL("failed to find VkFilter for \"%s\"", Name)
+    }
+    return Filter->Value;
 }
 
 } // vtk
