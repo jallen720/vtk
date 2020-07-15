@@ -212,32 +212,26 @@ main()
     Subpass->DepthAttachmentReference.Value.attachment = DepthAttachmentIndex;
     Subpass->DepthAttachmentReference.Value.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    // Creation
-    vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, &RenderPassInfo);
-
-    // Framebuffers
-    ctk::sarray<VkFramebuffer, 4> Framebuffers = {};
+    // Framebuffer Infos
     for(u32 FramebufferIndex = 0; FramebufferIndex < Swapchain.Images.Count; ++FramebufferIndex)
     {
-        vtk::framebuffer_info FramebufferInfo = {};
-        ctk::Push(&FramebufferInfo.Attachments, Swapchain.Images[FramebufferIndex].View);
-        ctk::Push(&FramebufferInfo.Attachments, DepthImage.View);
-        FramebufferInfo.Extent = Swapchain.Extent;
-        FramebufferInfo.Layers = 1;
-        ctk::Push(&Framebuffers, vtk::CreateFramebuffer(Device.Logical, RenderPass.Handle, &FramebufferInfo));
+        vtk::framebuffer_info *FramebufferInfo = ctk::Push(&RenderPassInfo.FramebufferInfos);
+        ctk::Push(&FramebufferInfo->Attachments, Swapchain.Images[FramebufferIndex].View);
+        ctk::Push(&FramebufferInfo->Attachments, DepthImage.View);
+        FramebufferInfo->Extent = Swapchain.Extent;
+        FramebufferInfo->Layers = 1;
     }
 
-    // Command Buffers
-    ctk::sarray<VkCommandBuffer, 4> CommandBuffers = {};
-    vtk::AllocateCommandBuffers(Device.Logical, GraphicsCommandPool, Swapchain.Images.Count, CommandBuffers.Data);
+    // Creation
+    vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, GraphicsCommandPool, &RenderPassInfo);
 
     ////////////////////////////////////////////////////////////
     /// Shader Modules
     ////////////////////////////////////////////////////////////
     vtk::shader_module VertexShader =
-        vtk::LoadShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
     vtk::shader_module FragmentShader =
-        vtk::LoadShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     ////////////////////////////////////////////////////////////
     /// Vertex Layout
@@ -280,8 +274,8 @@ main()
                                                  &GrassTextureInfo);
     vtk::texture_info DirtTextureInfo = {};
     DirtTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture DirtTexture = vtk::LoadTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
-                                                &DirtTextureInfo);
+    vtk::texture DirtTexture = vtk::CreateTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
+                                                  &DirtTextureInfo);
 
     ////////////////////////////////////////////////////////////
     /// Descriptor Sets
@@ -420,13 +414,13 @@ main()
 
     for(u32 FrameIndex = 0; FrameIndex < FrameState.Frames.Count; ++FrameIndex)
     {
-        VkCommandBuffer CommandBuffer = CommandBuffers[FrameIndex];
+        VkCommandBuffer CommandBuffer = RenderPass.CommandBuffers[FrameIndex];
         vtk::ValidateVkResult(vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo),
                               "vkBeginCommandBuffer", "failed to begin recording command buffer");
         VkRenderPassBeginInfo RenderPassBeginInfo = {};
         RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         RenderPassBeginInfo.renderPass = RenderPass.Handle;
-        RenderPassBeginInfo.framebuffer = Framebuffers[FrameIndex];
+        RenderPassBeginInfo.framebuffer = RenderPass.Framebuffers[FrameIndex];
         RenderPassBeginInfo.renderArea = RenderArea;
         RenderPassBeginInfo.clearValueCount = RenderPass.ClearValues.Count;
         RenderPassBeginInfo.pClearValues = RenderPass.ClearValues.Data;
@@ -611,7 +605,7 @@ main()
         VkSemaphore QueueSubmitWaitSemaphores[] = { CurrentFrame->ImageAquiredSemaphore };
         VkPipelineStageFlags QueueSubmitWaitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
         VkSemaphore QueueSubmitSignalSemaphores[] = { CurrentFrame->RenderFinishedSemaphore };
-        VkCommandBuffer QueueSubmitCommandBuffers[] = { CommandBuffers[SwapchainImageIndex] };
+        VkCommandBuffer QueueSubmitCommandBuffers[] = { RenderPass.CommandBuffers[SwapchainImageIndex] };
 
         VkSubmitInfo SubmitInfos[1] = {};
         SubmitInfos[0].sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

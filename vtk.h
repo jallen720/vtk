@@ -135,23 +135,26 @@ struct subpass
     ctk::optional<VkAttachmentReference> DepthAttachmentReference;
 };
 
+struct framebuffer_info
+{
+    ctk::sarray<VkImageView, 4> Attachments;
+    VkExtent2D Extent;
+    u32 Layers;
+};
+
 struct render_pass_info
 {
     ctk::sarray<attachment, 4> Attachments;
     ctk::sarray<subpass, 4> Subpasses;
+    ctk::sarray<framebuffer_info, 4> FramebufferInfos;
 };
 
 struct render_pass
 {
     VkRenderPass Handle;
     ctk::sarray<VkClearValue, 4> ClearValues;
-};
-
-struct framebuffer_info
-{
-    ctk::sarray<VkImageView, 4> Attachments;
-    VkExtent2D Extent;
-    u32 Layers;
+    ctk::sarray<VkFramebuffer, 4> Framebuffers;
+    ctk::sarray<VkCommandBuffer, 4> CommandBuffers;
 };
 
 struct shader_module
@@ -1213,7 +1216,7 @@ CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_i
 }
 
 static render_pass
-CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
+CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
 
@@ -1256,9 +1259,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
     SubpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     SubpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-    ////////////////////////////////////////////////////////////
-    /// Render Pass
-    ////////////////////////////////////////////////////////////
+    // Render Pass
     VkRenderPassCreateInfo RenderPassCreateInfo = {};
     RenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     RenderPassCreateInfo.attachmentCount = AttachmentDescriptions.Count;
@@ -1269,6 +1270,17 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
     RenderPassCreateInfo.pDependencies = SubpassDependencies;
     ValidateVkResult(vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle),
                      "vkCreateRenderPass", "failed to create render pass");
+
+    // Framebuffers
+    u32 FramebufferCount = RenderPassInfo->FramebufferInfos.Count;
+    for(u32 FramebufferIndex = 0; FramebufferIndex < FramebufferCount; ++FramebufferIndex)
+    {
+        ctk::Push(&RenderPass.Framebuffers, CreateFramebuffer(LogicalDevice, RenderPass.Handle, RenderPassInfo->FramebufferInfos + FramebufferIndex));
+    }
+
+    // Command Buffers (1 per framebuffer)
+    RenderPass.CommandBuffers.Count = FramebufferCount;
+    AllocateCommandBuffers(LogicalDevice, CommandPool, FramebufferCount, RenderPass.CommandBuffers.Data);
 
     return RenderPass;
 }
