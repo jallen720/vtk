@@ -1195,14 +1195,29 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
     return Texture;
 }
 
+static VkFramebuffer
+CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_info *FramebufferInfo)
+{
+    VkFramebufferCreateInfo FramebufferCreateInfo = {};
+    FramebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    FramebufferCreateInfo.renderPass = RenderPass;
+    FramebufferCreateInfo.attachmentCount = FramebufferInfo->Attachments.Count;
+    FramebufferCreateInfo.pAttachments = FramebufferInfo->Attachments.Data;
+    FramebufferCreateInfo.width = FramebufferInfo->Extent.width;
+    FramebufferCreateInfo.height = FramebufferInfo->Extent.height;
+    FramebufferCreateInfo.layers = FramebufferInfo->Layers;
+    VkFramebuffer Framebuffer = VK_NULL_HANDLE;
+    ValidateVkResult(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
+                     "vkCreateFramebuffer", "failed to create framebuffer");
+    return Framebuffer;
+}
+
 static render_pass
 CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
 
-    ////////////////////////////////////////////////////////////
-    /// Attachments
-    ////////////////////////////////////////////////////////////
+    // Attachments
     ctk::sarray<VkAttachmentDescription, 4> AttachmentDescriptions = {};
     for(u32 AttachmentIndex = 0; AttachmentIndex < RenderPassInfo->Attachments.Count; ++AttachmentIndex)
     {
@@ -1216,9 +1231,7 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
         }
     }
 
-    ////////////////////////////////////////////////////////////
-    /// Subpasses
-    ////////////////////////////////////////////////////////////
+    // Subpasses
     ctk::sarray<VkSubpassDescription, 4> SubpassDescriptions = {};
     for(u32 SubpassIndex = 0; SubpassIndex < RenderPassInfo->Subpasses.Count; ++SubpassIndex)
     {
@@ -1258,23 +1271,6 @@ CreateRenderPass(VkDevice LogicalDevice, render_pass_info *RenderPassInfo)
                      "vkCreateRenderPass", "failed to create render pass");
 
     return RenderPass;
-}
-
-static VkFramebuffer
-CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_info *FramebufferInfo)
-{
-    VkFramebufferCreateInfo FramebufferCreateInfo = {};
-    FramebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    FramebufferCreateInfo.renderPass = RenderPass;
-    FramebufferCreateInfo.attachmentCount = FramebufferInfo->Attachments.Count;
-    FramebufferCreateInfo.pAttachments = FramebufferInfo->Attachments.Data;
-    FramebufferCreateInfo.width = FramebufferInfo->Extent.width;
-    FramebufferCreateInfo.height = FramebufferInfo->Extent.height;
-    FramebufferCreateInfo.layers = FramebufferInfo->Layers;
-    VkFramebuffer Framebuffer = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
-                     "vkCreateFramebuffer", "failed to create framebuffer");
-    return Framebuffer;
 }
 
 static shader_module
@@ -1862,7 +1858,7 @@ BindDescriptorSets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipel
     ctk::sarray<u32, 16> DynamicOffsets = {};
     for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetCount; ++DescriptorSetIndex)
     {
-        vtk::descriptor_set *DescriptorSet = DescriptorSets[DescriptorSetIndex];
+        descriptor_set *DescriptorSet = DescriptorSets[DescriptorSetIndex];
         u32 DescriptorSetInstanceIndex = DescriptorSet->Instances.Count > 1 ? InstanceIndex : 0;
         ctk::Push(&DescriptorSetsToBind, DescriptorSet->Instances[DescriptorSetInstanceIndex]);
         for(u32 DynamicOffsetIndex = 0; DynamicOffsetIndex < DescriptorSet->DynamicOffsets.Count; ++DynamicOffsetIndex)
