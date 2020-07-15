@@ -1275,7 +1275,8 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
     u32 FramebufferCount = RenderPassInfo->FramebufferInfos.Count;
     for(u32 FramebufferIndex = 0; FramebufferIndex < FramebufferCount; ++FramebufferIndex)
     {
-        ctk::Push(&RenderPass.Framebuffers, CreateFramebuffer(LogicalDevice, RenderPass.Handle, RenderPassInfo->FramebufferInfos + FramebufferIndex));
+        ctk::Push(&RenderPass.Framebuffers,
+                  CreateFramebuffer(LogicalDevice, RenderPass.Handle, RenderPassInfo->FramebufferInfos + FramebufferIndex));
     }
 
     // Command Buffers (1 per framebuffer)
