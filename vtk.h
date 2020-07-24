@@ -65,16 +65,32 @@ struct device
     VkQueue PresentQueue;
 };
 
-struct swapchain_image
+struct image_info
+{
+    u32 Width;
+    u32 Height;
+    VkFormat Format;
+    VkImageTiling Tiling;
+    VkImageUsageFlags UsageFlags;
+    VkMemoryPropertyFlags MemoryPropertyFlags;
+    VkImageAspectFlags AspectMask;
+};
+
+struct image
 {
     VkImage Handle;
+    VkDeviceMemory Memory;
+    VkDeviceSize Width;
+    VkDeviceSize Height;
+    VkFormat Format;
     VkImageView View;
+    VkImageLayout Layout;
 };
 
 struct swapchain
 {
     VkSwapchainKHR Handle;
-    ctk::sarray<swapchain_image, 4> Images;
+    ctk::sarray<image, 4> Images;
     VkFormat ImageFormat;
     VkExtent2D Extent;
 };
@@ -99,28 +115,6 @@ struct region
     buffer *Buffer;
     VkDeviceSize Size;
     VkDeviceSize Offset;
-};
-
-struct image_info
-{
-    u32 Width;
-    u32 Height;
-    VkFormat Format;
-    VkImageTiling Tiling;
-    VkImageUsageFlags UsageFlags;
-    VkMemoryPropertyFlags MemoryPropertyFlags;
-    VkImageAspectFlags AspectMask;
-};
-
-struct image
-{
-    VkImage Handle;
-    VkDeviceMemory Memory;
-    VkDeviceSize Width;
-    VkDeviceSize Height;
-    VkFormat Format;
-    VkImageView View;
-    VkImageLayout Layout;
 };
 
 struct attachment
@@ -152,6 +146,7 @@ struct render_pass_info
 struct render_pass
 {
     VkRenderPass Handle;
+    u32 ColorAttachmentCount;
     ctk::sarray<VkClearValue, 4> ClearValues;
     ctk::sarray<VkFramebuffer, 4> Framebuffers;
     ctk::sarray<VkCommandBuffer, 4> CommandBuffers;
@@ -178,8 +173,8 @@ struct vertex_layout
 
 struct vertex_input
 {
-    u32 Location;
     u32 Binding;
+    u32 Location;
     u32 AttributeIndex;
 };
 
@@ -299,7 +294,7 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
 ////////////////////////////////////////////////////////////
 static VKAPI_ATTR VkBool32 VKAPI_CALL
 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverityFlagBits, VkDebugUtilsMessageTypeFlagsEXT MessageTypeFlags,
-              const VkDebugUtilsMessengerCallbackDataEXT *CallbackData, void *UserData)
+              VkDebugUtilsMessengerCallbackDataEXT const *CallbackData, void *UserData)
 {
     cstr MessageID = CallbackData->pMessageIdName ? CallbackData->pMessageIdName : "";
     if(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & MessageSeverityFlagBits)
@@ -492,7 +487,7 @@ Free(device_query_results *DeviceQueryResults)
 static VkDeviceQueueCreateInfo
 CreateQueueCreateInfo(u32 QueueFamilyIndex)
 {
-    static const f32 QUEUE_PRIORITIES[] = { 1.0f };
+    static f32 const QUEUE_PRIORITIES[] = { 1.0f };
 
     VkDeviceQueueCreateInfo QueueCreateInfo = {};
     QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -853,7 +848,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
                      "vkCreateDevice", "failed to create logical device");
 
     // Get logical device queues.
-    static const u32 QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
+    static u32 const QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
     vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Graphics, QUEUE_INDEX, &Device.GraphicsQueue);
     vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Present, QUEUE_INDEX, &Device.PresentQueue);
 
@@ -931,7 +926,7 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     SwapchainCreateInfo.imageColorSpace = SelectedFormat.colorSpace;
     SwapchainCreateInfo.imageExtent = Device->SurfaceCapabilities.currentExtent;
     SwapchainCreateInfo.imageArrayLayers = 1; // Always 1 for standard images.
-    SwapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    SwapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     SwapchainCreateInfo.preTransform = Device->SurfaceCapabilities.currentTransform;
     SwapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     SwapchainCreateInfo.presentMode = SelectedPresentMode;
@@ -952,20 +947,23 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     ValidateVkResult(vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle),
                      "vkCreateSwapchainKHR", "failed to create swapchain");
 
+    // Store surface state used to create swapchain for future reference.
+    Swapchain.ImageFormat = SelectedFormat.format;
+    Swapchain.Extent = Device->SurfaceCapabilities.currentExtent;
+
     ////////////////////////////////////////////////////////////
     /// Swapchain Image Creation
     ////////////////////////////////////////////////////////////
     auto Images = LoadVkObjects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Handle);
     for(u32 ImageIndex = 0; ImageIndex < Images.Count; ++ImageIndex)
     {
-        swapchain_image *SwapchainImage = ctk::Push(&Swapchain.Images);
+        image *SwapchainImage = ctk::Push(&Swapchain.Images);
         SwapchainImage->Handle = Images[ImageIndex];
         SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Handle, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
+        SwapchainImage->Width = Swapchain.Extent.width;
+        SwapchainImage->Height = Swapchain.Extent.height;
+        SwapchainImage->Format = Swapchain.ImageFormat;
     }
-
-    // Store surface state used to create swapchain for future reference.
-    Swapchain.ImageFormat = SelectedFormat.format;
-    Swapchain.Extent = Device->SurfaceCapabilities.currentExtent;
 
     // Cleanup
     ctk::Free(&Images);
@@ -1125,7 +1123,7 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
     texture Texture = {};
 
     // Load image from path.
-    static const u32 IMAGE_CHANNELS = STBI_rgb_alpha;
+    static u32 const IMAGE_CHANNELS = STBI_rgb_alpha;
     s32 ImageWidth = 0;
     s32 ImageHeight = 0;
     s32 ImageChannelCount = 0;
@@ -1219,6 +1217,7 @@ static render_pass
 CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
+    RenderPass.ColorAttachmentCount = 0;
 
     // Attachments
     ctk::sarray<VkAttachmentDescription, 4> AttachmentDescriptions = {};
@@ -1249,13 +1248,19 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
         SubpassDescription->pDepthStencilAttachment = Subpass->DepthAttachmentReference ? &Subpass->DepthAttachmentReference.Value : NULL;
         SubpassDescription->preserveAttachmentCount = 0;
         SubpassDescription->pPreserveAttachments = NULL;
+
+        ctk::Todo("HACK: taking largest subpass color attachment reference count as render pass color attachment count");
+        if(Subpass->ColorAttachmentReferences.Count > RenderPass.ColorAttachmentCount)
+        {
+            RenderPass.ColorAttachmentCount = Subpass->ColorAttachmentReferences.Count;
+        }
     }
 
     VkSubpassDependency SubpassDependencies[1] = {};
     SubpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    SubpassDependencies[0].dstSubpass = 0;
     SubpassDependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     SubpassDependencies[0].srcAccessMask = 0;
+    SubpassDependencies[0].dstSubpass = 0;
     SubpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     SubpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
@@ -1297,7 +1302,7 @@ CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits Stag
     ShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     ShaderModuleCreateInfo.flags = 0;
     ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
-    ShaderModuleCreateInfo.pCode = (const u32 *)ShaderByteCode.Data;
+    ShaderModuleCreateInfo.pCode = (u32 const *)ShaderByteCode.Data;
     ValidateVkResult(vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle),
                      "vkCreateShaderModule", "failed to create shader module");
 
@@ -1326,7 +1331,7 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
 }
 
 static graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
+CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
 {
     graphics_pipeline GraphicsPipeline = {};
 
@@ -1449,25 +1454,30 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     MultisampleState.alphaToCoverageEnable = VK_FALSE;
     MultisampleState.alphaToOneEnable = VK_FALSE;
 
-    VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
-    ColorBlendAttachmentState.blendEnable = VK_FALSE;
-    ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
-    ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-    ColorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                               VK_COLOR_COMPONENT_G_BIT |
-                                               VK_COLOR_COMPONENT_B_BIT |
-                                               VK_COLOR_COMPONENT_A_BIT;
+    ctk::Todo("HACK: duplicated color blend states for each color attachment in render pass");
+    ctk::sarray<VkPipelineColorBlendAttachmentState, 4> ColorBlendAttachmentStates = {};
+    CTK_REPEAT(RenderPass->ColorAttachmentCount)
+    {
+        VkPipelineColorBlendAttachmentState *ColorBlendAttachmentState = ctk::Push(&ColorBlendAttachmentStates);
+        ColorBlendAttachmentState->blendEnable = VK_FALSE;
+        ColorBlendAttachmentState->srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        ColorBlendAttachmentState->dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        ColorBlendAttachmentState->colorBlendOp = VK_BLEND_OP_ADD;
+        ColorBlendAttachmentState->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        ColorBlendAttachmentState->dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        ColorBlendAttachmentState->alphaBlendOp = VK_BLEND_OP_ADD;
+        ColorBlendAttachmentState->colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                                    VK_COLOR_COMPONENT_G_BIT |
+                                                    VK_COLOR_COMPONENT_B_BIT |
+                                                    VK_COLOR_COMPONENT_A_BIT;
+    }
 
     VkPipelineColorBlendStateCreateInfo ColorBlendState = {};
     ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     ColorBlendState.logicOpEnable = VK_FALSE;
     ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    ColorBlendState.attachmentCount = 1;
-    ColorBlendState.pAttachments = &ColorBlendAttachmentState;
+    ColorBlendState.attachmentCount = ColorBlendAttachmentStates.Count;
+    ColorBlendState.pAttachments = ColorBlendAttachmentStates.Data;
     ColorBlendState.blendConstants[0] = 0.0f;
     ColorBlendState.blendConstants[1] = 0.0f;
     ColorBlendState.blendConstants[2] = 0.0f;
@@ -1502,7 +1512,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, VkRenderPass RenderPass, graphics
     GraphicsPipelineCreateInfo.pColorBlendState = &ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState = NULL;
     GraphicsPipelineCreateInfo.layout = GraphicsPipeline.Layout;
-    GraphicsPipelineCreateInfo.renderPass = RenderPass;
+    GraphicsPipelineCreateInfo.renderPass = RenderPass->Handle;
     GraphicsPipelineCreateInfo.subpass = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex = -1;
@@ -1567,13 +1577,13 @@ WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRe
 static VkFormat
 FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
 {
-    static const VkFormat DEPTH_IMAGE_FORMATS[] =
+    static VkFormat const DEPTH_IMAGE_FORMATS[] =
     {
         VK_FORMAT_D24_UNORM_S8_UINT,
         VK_FORMAT_D32_SFLOAT,
         VK_FORMAT_D32_SFLOAT_S8_UINT,
     };
-    static const VkFormatFeatureFlags DEPTH_IMG_FORMAT_FEATURES = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    static VkFormatFeatureFlags const DEPTH_IMG_FORMAT_FEATURES = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
     for(u32 DepthImageFormatIndex = 0; DepthImageFormatIndex < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); DepthImageFormatIndex++)
     {
         VkFormat DepthImageFormat = DEPTH_IMAGE_FORMATS[DepthImageFormatIndex];
@@ -1585,6 +1595,59 @@ FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
         }
     }
     CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
+}
+
+struct image_memory_info
+{
+    VkAccessFlags AccessMask;
+    VkImageLayout ImageLayout;
+    VkPipelineStageFlags PipelineStageMask;
+};
+
+struct image_memory_access_mask
+{
+    VkAccessFlags Source;
+    VkAccessFlags Destination;
+};
+
+struct image_memory_image_layout
+{
+    VkImageLayout Source;
+    VkImageLayout Destination;
+};
+
+struct image_memory_pipeline_stage_mask
+{
+    VkPipelineStageFlags Source;
+    VkPipelineStageFlags Destination;
+};
+
+static void
+InsertImageMemoryBarrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
+                         image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
+                         image_memory_pipeline_stage_mask PipelineStageMask)
+{
+    VkImageMemoryBarrier ImageMemoryBarrier = {};
+    ImageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    ImageMemoryBarrier.srcAccessMask = AccessMask.Source;
+    ImageMemoryBarrier.dstAccessMask = AccessMask.Destination;
+    ImageMemoryBarrier.oldLayout = ImageLayout.Source;
+    ImageMemoryBarrier.newLayout = ImageLayout.Destination;
+    ImageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ImageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    ImageMemoryBarrier.image = Image;
+    ImageMemoryBarrier.subresourceRange.aspectMask = AspectMask;
+    ImageMemoryBarrier.subresourceRange.baseMipLevel = 0;
+    ImageMemoryBarrier.subresourceRange.levelCount = 1;
+    ImageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
+    ImageMemoryBarrier.subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(CommandBuffer,
+                         PipelineStageMask.Source,
+                         PipelineStageMask.Destination,
+                         0, // Dependency Flags
+                         0, NULL, // Memory Barriers
+                         0, NULL, // Buffer Memory Barriers
+                         1, &ImageMemoryBarrier); // Image Memory Barriers
 }
 
 static void
@@ -1615,6 +1678,13 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
         DestinationAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         SourcePipelineStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         DestinationPipelineStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    else if(OldLayout == VK_IMAGE_LAYOUT_UNDEFINED && NewLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+    {
+        SourceAccessMask = 0;
+        DestinationAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+        SourcePipelineStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        DestinationPipelineStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     }
     else
     {

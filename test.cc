@@ -199,7 +199,7 @@ main()
     DepthAttachment->Description.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // Not currently relevant.
     DepthAttachment->Description.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Image layout before render pass.
     DepthAttachment->Description.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    DepthAttachment->ClearValue = { 1.0f, 0.0f };
+    DepthAttachment->ClearValue = { 1.0f, 0 };
 
     // Subpasses
     vtk::subpass *Subpass = ctk::Push(&RenderPassInfo.Subpasses);
