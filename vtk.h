@@ -284,17 +284,20 @@ struct descriptor_set
 /// Declarations
 ////////////////////////////////////////////////////////////
 static void
-WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion);
+write_to_host_region(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion);
 
 static void
-TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout);
+transition_image_layout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout);
+
+static void
+validate_vk_result(VkResult Result, cstr FunctionName, cstr FailureMessage);
 
 ////////////////////////////////////////////////////////////
 /// Internal
 ////////////////////////////////////////////////////////////
 static VKAPI_ATTR VkBool32 VKAPI_CALL
-DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverityFlagBits, VkDebugUtilsMessageTypeFlagsEXT MessageTypeFlags,
-              VkDebugUtilsMessengerCallbackDataEXT const *CallbackData, void *UserData)
+debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverityFlagBits, VkDebugUtilsMessageTypeFlagsEXT MessageTypeFlags,
+               VkDebugUtilsMessengerCallbackDataEXT const *CallbackData, void *UserData)
 {
     cstr MessageID = CallbackData->pMessageIdName ? CallbackData->pMessageIdName : "";
     if(VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & MessageSeverityFlagBits)
@@ -303,17 +306,17 @@ DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverityFlagBits, Vk
     }
     else if(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT & MessageSeverityFlagBits)
     {
-        ctk::Warning("VALIDATION LAYER [%s]: %s\n", MessageID, CallbackData->pMessage);
+        ctk::warning("VALIDATION LAYER [%s]: %s\n", MessageID, CallbackData->pMessage);
     }
     else
     {
-        ctk::Info("VALIDATION LAYER [%s]: %s\n", MessageID, CallbackData->pMessage);
+        ctk::info("VALIDATION LAYER [%s]: %s\n", MessageID, CallbackData->pMessage);
     }
     return VK_FALSE;
 }
 
 static void
-OutputVkResult(VkResult Result, cstr FunctionName)
+output_vk_result(VkResult Result, cstr FunctionName)
 {
     static vk_result_debug_info VK_RESULT_DEBUG_INFOS[] =
     {
@@ -365,44 +368,44 @@ OutputVkResult(VkResult Result, cstr FunctionName)
 
     if(DebugInfo->Result == 0)
     {
-        ctk::Info("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
+        ctk::info("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
     }
     else if(DebugInfo->Result > 0)
     {
-        ctk::Warning("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
+        ctk::warning("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
     }
     else
     {
-        ctk::Error("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
+        ctk::error("%s() returned %s: %s", FunctionName, DebugInfo->ResultName, DebugInfo->Message);
     }
 }
 
 template<typename vk_object, typename loader, typename ...args>
 static ctk::array<vk_object>
-LoadVkObjects(loader Loader, args... Args)
+load_vk_objects(loader Loader, args... Args)
 {
     u32 Count = 0;
     Loader(Args..., &Count, NULL);
-    auto VkObjects = ctk::CreateArray<vk_object>(Count);
+    auto VkObjects = ctk::create_array<vk_object>(Count);
     Loader(Args..., &Count, VkObjects.Data);
     return VkObjects;
 }
 
 static cstr
-LayerName(VkLayerProperties *Properties)
+layer_name(VkLayerProperties *Properties)
 {
     return Properties->layerName;
 }
 
 static cstr
-ExtensionName(VkExtensionProperties *Properties)
+extension_name(VkExtensionProperties *Properties)
 {
     return Properties->extensionName;
 }
 
 template<typename properties, typename name_selector>
 static b32
-AddOnsSupported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
+add_ons_supported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedAddOns, name_selector NameSelector)
 {
     b32 AllSupported = true;
     for(u32 AddOnIndex = 0; AddOnIndex < AddOnCount; ++AddOnIndex)
@@ -411,8 +414,8 @@ AddOnsSupported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedA
         cstr AddOn = AddOns[AddOnIndex];
         for(u32 SupportedAddOnsIndex = 0; SupportedAddOnsIndex < SupportedAddOns->Count; ++SupportedAddOnsIndex)
         {
-            cstr SupportedAddOnName = NameSelector(At(SupportedAddOns, SupportedAddOnsIndex));
-            if(ctk::StringEqual(AddOn, SupportedAddOnName))
+            cstr SupportedAddOnName = NameSelector(ctk::at(SupportedAddOns, SupportedAddOnsIndex));
+            if(ctk::equal(AddOn, SupportedAddOnName))
             {
                 Supported = true;
                 break;
@@ -421,7 +424,7 @@ AddOnsSupported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedA
         if(!Supported)
         {
             AllSupported = false;
-            ctk::Error("add-on \"%s\" is not supported", AddOn);
+            ctk::error("add-on \"%s\" is not supported", AddOn);
         }
     }
     return AllSupported;
@@ -429,27 +432,17 @@ AddOnsSupported(cstr *AddOns, u32 AddOnCount, ctk::array<properties> *SupportedA
 
 template<typename properties, typename name_selector, typename loader, typename ...args>
 static b32
-AddOnsSupported(cstr *AddOns, u32 AddOnCount, name_selector NameSelector, loader Loader, args... Args)
+add_ons_supported(cstr *AddOns, u32 AddOnCount, name_selector NameSelector, loader Loader, args... Args)
 {
-    auto SupportedAddOns = LoadVkObjects<properties>(Loader, Args...);
-    b32 AllSupported = AddOnsSupported<properties>(AddOns, AddOnCount, &SupportedAddOns, NameSelector);
-    ctk::Free(&SupportedAddOns);
+    auto SupportedAddOns = load_vk_objects<properties>(Loader, Args...);
+    b32 AllSupported = add_ons_supported<properties>(AddOns, AddOnCount, &SupportedAddOns, NameSelector);
+    ctk::_free(&SupportedAddOns);
     return AllSupported;
 }
 
-static void
-ValidateVkResult(VkResult Result, cstr FunctionName, cstr FailureMessage)
-{
-    if(Result != VK_SUCCESS)
-    {
-        OutputVkResult(Result, FunctionName);
-        CTK_FATAL(FailureMessage)
-    }
-}
-
 static VkInstance
-CreateVulkanInstance(cstr AppName, cstr *Extensions, u32 ExtensionCount, cstr *Layers, u32 LayerCount,
-                     VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
+create_vulkan_instance(cstr AppName, cstr *Extensions, u32 ExtensionCount, cstr *Layers, u32 LayerCount,
+                       VkDebugUtilsMessengerCreateInfoEXT *DebugUtilsMessengerCreateInfo)
 {
     VkApplicationInfo AppInfo = {};
     AppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -470,22 +463,22 @@ CreateVulkanInstance(cstr AppName, cstr *Extensions, u32 ExtensionCount, cstr *L
     InstanceCreateInfo.enabledExtensionCount = ExtensionCount;
     InstanceCreateInfo.ppEnabledExtensionNames = Extensions;
     VkInstance Instance = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateInstance(&InstanceCreateInfo, NULL, &Instance), "vkCreateInstance", "failed to create Vulkan instance");
+    validate_vk_result(vkCreateInstance(&InstanceCreateInfo, NULL, &Instance), "vkCreateInstance", "failed to create Vulkan instance");
     return Instance;
 }
 
 static void
-Free(device_query_results *DeviceQueryResults)
+_free(device_query_results *DeviceQueryResults)
 {
-    ctk::Free(&DeviceQueryResults->Extensions);
-    ctk::Free(&DeviceQueryResults->SurfaceFormats);
-    ctk::Free(&DeviceQueryResults->SurfacePresentModes);
-    ctk::Free(&DeviceQueryResults->QueueFamilies);
+    ctk::_free(&DeviceQueryResults->Extensions);
+    ctk::_free(&DeviceQueryResults->SurfaceFormats);
+    ctk::_free(&DeviceQueryResults->SurfacePresentModes);
+    ctk::_free(&DeviceQueryResults->QueueFamilies);
     *DeviceQueryResults = {};
 }
 
 static VkDeviceQueueCreateInfo
-CreateQueueCreateInfo(u32 QueueFamilyIndex)
+create_queue_create_info(u32 QueueFamilyIndex)
 {
     static f32 const QUEUE_PRIORITIES[] = { 1.0f };
 
@@ -500,7 +493,7 @@ CreateQueueCreateInfo(u32 QueueFamilyIndex)
 }
 
 static VkImageView
-CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageAspectFlags AspectFlags)
+create_image_view(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageAspectFlags AspectFlags)
 {
     VkImageViewCreateInfo ImageViewCreateInfo = {};
     ImageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -518,51 +511,28 @@ CreateImageView(VkDevice LogicalDevice, VkImage Image, VkFormat Format, VkImageA
     ImageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
     ImageViewCreateInfo.subresourceRange.layerCount = 1;
     VkImageView ImageView = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView),
-                     "vkCreateImageView", "failed to create image view");
+    validate_vk_result(vkCreateImageView(LogicalDevice, &ImageViewCreateInfo, NULL, &ImageView),
+                       "vkCreateImageView", "failed to create image view");
     return ImageView;
 }
 
-static VkSemaphore
-CreateSemaphore(VkDevice LogicalDevice)
-{
-    VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
-    SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    SemaphoreCreateInfo.flags = 0;
-    VkSemaphore Semaphore = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateSemaphore(LogicalDevice, &SemaphoreCreateInfo, NULL, &Semaphore),
-                     "vkCreateSemaphore", "failed to create semaphore");
-    return Semaphore;
-}
-
-static VkFence
-CreateFence(VkDevice LogicalDevice)
-{
-    VkFenceCreateInfo FenceCreateInfo = {};
-    FenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-    VkFence Fence = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence), "vkCreateFence", "failed to create fence");
-    return Fence;
-}
-
 static void
-AllocateCommandBuffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
+allocate_command_buffers(VkDevice LogicalDevice, VkCommandPool CommandPool, u32 Count, VkCommandBuffer *CommandBuffers)
 {
     VkCommandBufferAllocateInfo CommandBufferAllocateInfo = {};
     CommandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     CommandBufferAllocateInfo.commandPool = CommandPool;
     CommandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     CommandBufferAllocateInfo.commandBufferCount = Count;
-    ValidateVkResult(vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers),
-                     "vkAllocateCommandBuffers", "failed to allocate command buffer");
+    validate_vk_result(vkAllocateCommandBuffers(LogicalDevice, &CommandBufferAllocateInfo, CommandBuffers),
+                       "vkAllocateCommandBuffers", "failed to allocate command buffer");
 }
 
 static VkCommandBuffer
-BeginOneTimeCommandBuffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
+begin_one_time_command_buffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
 {
     VkCommandBuffer CommandBuffer = {};
-    AllocateCommandBuffers(LogicalDevice, CommandPool, 1, &CommandBuffer);
+    allocate_command_buffers(LogicalDevice, CommandPool, 1, &CommandBuffer);
 
     VkCommandBufferBeginInfo CommandBufferBeginInfo = {};
     CommandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -574,7 +544,7 @@ BeginOneTimeCommandBuffer(VkDevice LogicalDevice, VkCommandPool CommandPool)
 }
 
 static void
-SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer)
+submit_one_time_command_buffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool CommandPool, VkCommandBuffer CommandBuffer)
 {
     vkEndCommandBuffer(CommandBuffer);
 
@@ -582,8 +552,8 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
     SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     SubmitInfo.commandBufferCount = 1;
     SubmitInfo.pCommandBuffers = &CommandBuffer;
-    ValidateVkResult(vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE),
-                     "vkQueueSubmit", "failed to submit one-time command buffer to queue");
+    validate_vk_result(vkQueueSubmit(Queue, 1, &SubmitInfo, VK_NULL_HANDLE),
+                       "vkQueueSubmit", "failed to submit one-time command buffer to queue");
     vkQueueWaitIdle(Queue);
 
     // Cleanup
@@ -594,18 +564,18 @@ SubmitOneTimeCommandBuffer(VkDevice LogicalDevice, VkQueue Queue, VkCommandPool 
 /// Interface
 ////////////////////////////////////////////////////////////
 static instance
-CreateInstance(instance_info *InstanceInfo)
+create_instance(instance_info *InstanceInfo)
 {
     instance Instance = {};
     auto *Layers = &InstanceInfo->Layers;
     auto *Extensions = &InstanceInfo->Extensions;
-    if(!AddOnsSupported<VkLayerProperties>(Layers->Data, Layers->Count, LayerName, vkEnumerateInstanceLayerProperties))
+    if(!add_ons_supported<VkLayerProperties>(Layers->Data, Layers->Count, layer_name, vkEnumerateInstanceLayerProperties))
     {
         CTK_FATAL("not all requested layers supported")
     }
 
-    if(!AddOnsSupported<VkExtensionProperties>(Extensions->Data, Extensions->Count, ExtensionName, vkEnumerateInstanceExtensionProperties,
-                                               (cstr)NULL))
+    if(!add_ons_supported<VkExtensionProperties>(Extensions->Data, Extensions->Count, extension_name,
+                                                 vkEnumerateInstanceExtensionProperties, (cstr)NULL))
     {
         CTK_FATAL("not all requested extensions supported")
     }
@@ -617,8 +587,8 @@ CreateInstance(instance_info *InstanceInfo)
         CTK_ASSERT(Extensions->Count < Extensions->Size)
 
         // Add debug extensions and layers.
-        ctk::Push(Extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        ctk::Push(Layers, "VK_LAYER_LUNARG_standard_validation");
+        ctk::push(Extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        ctk::push(Layers, "VK_LAYER_LUNARG_standard_validation");
 
         VkDebugUtilsMessengerCreateInfoEXT DebugUtilsMessengerCreateInfo = {};
         DebugUtilsMessengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -631,29 +601,29 @@ CreateInstance(instance_info *InstanceInfo)
         DebugUtilsMessengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        DebugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
+        DebugUtilsMessengerCreateInfo.pfnUserCallback = debug_callback;
         DebugUtilsMessengerCreateInfo.pUserData = NULL;
 
         // Create Instance
-        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
-                                               &DebugUtilsMessengerCreateInfo);
+        Instance.Handle = create_vulkan_instance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
+                                                 &DebugUtilsMessengerCreateInfo);
 
         // Create Debug Utils Messenger
         VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(Instance.Handle, vkCreateDebugUtilsMessengerEXT)
-        ValidateVkResult(vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
+        validate_vk_result(vkCreateDebugUtilsMessengerEXT(Instance.Handle, &DebugUtilsMessengerCreateInfo, NULL,
                                                         &Instance.DebugUtilsMessenger),
-                         "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
+                           "vkCreateDebugUtilsMessengerEXT", "failed to create debug messenger");
     }
     else
     {
-        Instance.Handle = CreateVulkanInstance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
-                                               NULL);
+        Instance.Handle = create_vulkan_instance(InstanceInfo->AppName, Extensions->Data, Extensions->Count, Layers->Data, Layers->Count,
+                                                 NULL);
     }
     return Instance;
 }
 
 static device
-CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *DeviceInfo)
+create_device(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *DeviceInfo)
 {
     device Device = {};
     auto *Extensions = &DeviceInfo->Extensions;
@@ -661,7 +631,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
     ////////////////////////////////////////////////////////////
     /// Physical Device
     ////////////////////////////////////////////////////////////
-    auto PhysicalDevices = LoadVkObjects<VkPhysicalDevice>(vkEnumeratePhysicalDevices, Instance);
+    auto PhysicalDevices = load_vk_objects<VkPhysicalDevice>(vkEnumeratePhysicalDevices, Instance);
     b32 FoundSuitableDevice = false;
     for(u32 PhysicalDeviceIndex = 0; PhysicalDeviceIndex < PhysicalDevices.Count && !FoundSuitableDevice; ++PhysicalDeviceIndex)
     {
@@ -698,13 +668,13 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
         vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &SelectedDeviceQueryResults.MemoryProperties);
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(PhysicalDevice, PlatformSurface, &SelectedDeviceQueryResults.SurfaceCapabilities);
         SelectedDeviceQueryResults.Extensions =
-            LoadVkObjects<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, PhysicalDevice, (cstr)NULL);
+            load_vk_objects<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, PhysicalDevice, (cstr)NULL);
         SelectedDeviceQueryResults.SurfaceFormats =
-            LoadVkObjects<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR, PhysicalDevice, PlatformSurface);
+            load_vk_objects<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR, PhysicalDevice, PlatformSurface);
         SelectedDeviceQueryResults.SurfacePresentModes =
-            LoadVkObjects<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, PhysicalDevice, PlatformSurface);
+            load_vk_objects<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, PhysicalDevice, PlatformSurface);
         SelectedDeviceQueryResults.QueueFamilies =
-            LoadVkObjects<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, PhysicalDevice);
+            load_vk_objects<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, PhysicalDevice);
 
         // Find queue family indexes.
         for(u32 QueueFamilyIndex = 0; QueueFamilyIndex < SelectedDeviceQueryResults.QueueFamilies.Count; ++QueueFamilyIndex)
@@ -731,7 +701,7 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
             if(DeviceInfo->Features.FEATURE && !SelectedDeviceQueryResults.Features.FEATURE) \
             { \
                 DeviceFeaturesSupported = false; \
-                ctk::Error("requested device feature \"" #FEATURE "\" not supported"); \
+                ctk::error("requested device feature \"" #FEATURE "\" not supported"); \
             }
 
         b32 DeviceFeaturesSupported = true;
@@ -797,12 +767,12 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
         if(SelectedDeviceQueryResults.Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
            SelectedDeviceQueryResults.QueueFamilyIndexes.Graphics != VTK_UNSET_INDEX &&
            SelectedDeviceQueryResults.QueueFamilyIndexes.Present != VTK_UNSET_INDEX &&
-           AddOnsSupported<VkExtensionProperties>(Extensions->Data, Extensions->Count, &SelectedDeviceQueryResults.Extensions,
-                                                  ExtensionName);
+           add_ons_supported<VkExtensionProperties>(Extensions->Data, Extensions->Count, &SelectedDeviceQueryResults.Extensions,
+                                                    extension_name);
            DeviceFeaturesSupported &&
            SwapchainsSupported)
         {
-            ctk::Info("physical device \"%s\" satisfies all requirements", SelectedDeviceQueryResults.Properties.deviceName);
+            ctk::info("physical device \"%s\" satisfies all requirements", SelectedDeviceQueryResults.Properties.deviceName);
             FoundSuitableDevice = true;
 
             // Initialize physical device with selected device info.
@@ -810,14 +780,14 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
             Device.MemoryProperties = SelectedDeviceQueryResults.MemoryProperties;
             Device.QueueFamilyIndexes = SelectedDeviceQueryResults.QueueFamilyIndexes;
             Device.SurfaceCapabilities = SelectedDeviceQueryResults.SurfaceCapabilities;
-            Device.SurfaceFormats = ctk::CreateArray(&SelectedDeviceQueryResults.SurfaceFormats);
-            Device.SurfacePresentModes = ctk::CreateArray(&SelectedDeviceQueryResults.SurfacePresentModes);
+            Device.SurfaceFormats = ctk::create_array(&SelectedDeviceQueryResults.SurfaceFormats);
+            Device.SurfacePresentModes = ctk::create_array(&SelectedDeviceQueryResults.SurfacePresentModes);
         }
         else
         {
-            ctk::Error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceQueryResults.Properties.deviceName);
+            ctk::error("physical device \"%s\" does not satisfy all requirements", SelectedDeviceQueryResults.Properties.deviceName);
         }
-        Free(&SelectedDeviceQueryResults);
+        _free(&SelectedDeviceQueryResults);
     }
     if(!FoundSuitableDevice)
     {
@@ -828,10 +798,10 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
     /// Logical Device
     ////////////////////////////////////////////////////////////
     ctk::sarray<VkDeviceQueueCreateInfo, 2> QueueCreateInfos = {};
-    Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.QueueFamilyIndexes.Graphics));
+    push(&QueueCreateInfos, create_queue_create_info(Device.QueueFamilyIndexes.Graphics));
     if(Device.QueueFamilyIndexes.Present != Device.QueueFamilyIndexes.Graphics)
     {
-        Push(&QueueCreateInfos, CreateQueueCreateInfo(Device.QueueFamilyIndexes.Present));
+        push(&QueueCreateInfos, create_queue_create_info(Device.QueueFamilyIndexes.Present));
     }
 
     VkDeviceCreateInfo LogicalDeviceCreateInfo = {};
@@ -844,8 +814,8 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
     LogicalDeviceCreateInfo.enabledExtensionCount = Extensions->Count;
     LogicalDeviceCreateInfo.ppEnabledExtensionNames = Extensions->Data;
     LogicalDeviceCreateInfo.pEnabledFeatures = &DeviceInfo->Features;
-    ValidateVkResult(vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical),
-                     "vkCreateDevice", "failed to create logical device");
+    validate_vk_result(vkCreateDevice(Device.Physical, &LogicalDeviceCreateInfo, NULL, &Device.Logical),
+                       "vkCreateDevice", "failed to create logical device");
 
     // Get logical device queues.
     static u32 const QUEUE_INDEX = 0; // Currently only supporting 1 queue per family.
@@ -853,13 +823,13 @@ CreateDevice(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *Dev
     vkGetDeviceQueue(Device.Logical, Device.QueueFamilyIndexes.Present, QUEUE_INDEX, &Device.PresentQueue);
 
     // Cleanup
-    ctk::Free(&PhysicalDevices);
+    ctk::_free(&PhysicalDevices);
 
     return Device;
 }
 
 static swapchain
-CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
+create_swapchain(device *Device, VkSurfaceKHR PlatformSurface)
 {
     swapchain Swapchain = {};
 
@@ -944,8 +914,8 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
         SwapchainCreateInfo.queueFamilyIndexCount = 0;
         SwapchainCreateInfo.pQueueFamilyIndices = NULL;
     }
-    ValidateVkResult(vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle),
-                     "vkCreateSwapchainKHR", "failed to create swapchain");
+    validate_vk_result(vkCreateSwapchainKHR(Device->Logical, &SwapchainCreateInfo, NULL, &Swapchain.Handle),
+                       "vkCreateSwapchainKHR", "failed to create swapchain");
 
     // Store surface state used to create swapchain for future reference.
     Swapchain.ImageFormat = SelectedFormat.format;
@@ -954,38 +924,38 @@ CreateSwapchain(device *Device, VkSurfaceKHR PlatformSurface)
     ////////////////////////////////////////////////////////////
     /// Swapchain Image Creation
     ////////////////////////////////////////////////////////////
-    auto Images = LoadVkObjects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Handle);
+    auto Images = load_vk_objects<VkImage>(vkGetSwapchainImagesKHR, Device->Logical, Swapchain.Handle);
     for(u32 ImageIndex = 0; ImageIndex < Images.Count; ++ImageIndex)
     {
-        image *SwapchainImage = ctk::Push(&Swapchain.Images);
+        image *SwapchainImage = ctk::push(&Swapchain.Images);
         SwapchainImage->Handle = Images[ImageIndex];
-        SwapchainImage->View = CreateImageView(Device->Logical, SwapchainImage->Handle, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
+        SwapchainImage->View = create_image_view(Device->Logical, SwapchainImage->Handle, SelectedFormat.format, VK_IMAGE_ASPECT_COLOR_BIT);
         SwapchainImage->Width = Swapchain.Extent.width;
         SwapchainImage->Height = Swapchain.Extent.height;
         SwapchainImage->Format = Swapchain.ImageFormat;
     }
 
     // Cleanup
-    ctk::Free(&Images);
+    ctk::_free(&Images);
 
     return Swapchain;
 }
 
 static VkCommandPool
-CreateCommandPool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
+create_command_pool(VkDevice LogicalDevice, u32 QueueFamilyIndex)
 {
     VkCommandPoolCreateInfo CommandPoolCreateInfo = {};
     CommandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     CommandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     CommandPoolCreateInfo.queueFamilyIndex = QueueFamilyIndex;
     VkCommandPool CommandPool = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool),
-                     "vkCreateCommandPool", "failed to create command pool");
+    validate_vk_result(vkCreateCommandPool(LogicalDevice, &CommandPoolCreateInfo, NULL, &CommandPool),
+                       "vkCreateCommandPool", "failed to create command pool");
     return CommandPool;
 }
 
 static VkDeviceMemory
-AllocateDeviceMemory(device *Device, VkMemoryRequirements *MemoryRequirements, VkMemoryPropertyFlags MemoryPropertyFlags)
+allocate_device_memory(device *Device, VkMemoryRequirements *MemoryRequirements, VkMemoryPropertyFlags MemoryPropertyFlags)
 {
     // Find memory type index from device based on memory property flags.
     u32 SelectedMemoryTypeIndex = VTK_UNSET_INDEX;
@@ -1014,14 +984,14 @@ AllocateDeviceMemory(device *Device, VkMemoryRequirements *MemoryRequirements, V
     MemoryAllocateInfo.allocationSize = MemoryRequirements->size;
     MemoryAllocateInfo.memoryTypeIndex = SelectedMemoryTypeIndex;
     VkDeviceMemory Memory = VK_NULL_HANDLE;
-    ValidateVkResult(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Memory),
-                     "vkAllocateMemory", "failed to allocate memory");
+    validate_vk_result(vkAllocateMemory(Device->Logical, &MemoryAllocateInfo, NULL, &Memory),
+                       "vkAllocateMemory", "failed to allocate memory");
 
     return Memory;
 }
 
 static buffer
-CreateBuffer(device *Device, buffer_info *BufferInfo)
+create_buffer(device *Device, buffer_info *BufferInfo)
 {
     buffer Buffer = {};
     Buffer.Size = BufferInfo->Size;
@@ -1034,28 +1004,28 @@ CreateBuffer(device *Device, buffer_info *BufferInfo)
     BufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     BufferCreateInfo.queueFamilyIndexCount = 0;
     BufferCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
-    ValidateVkResult(vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle),
-                     "vkCreateBuffer", "failed to create buffer");
+    validate_vk_result(vkCreateBuffer(Device->Logical, &BufferCreateInfo, NULL, &Buffer.Handle),
+                       "vkCreateBuffer", "failed to create buffer");
 
     // Memory Allocation & Binding
     VkMemoryRequirements MemoryRequirements = {};
     vkGetBufferMemoryRequirements(Device->Logical, Buffer.Handle, &MemoryRequirements);
-    Buffer.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, BufferInfo->MemoryPropertyFlags);
-    ValidateVkResult(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
-                     "vkBindBufferMemory", "failed to bind buffer memory");
+    Buffer.Memory = allocate_device_memory(Device, &MemoryRequirements, BufferInfo->MemoryPropertyFlags);
+    validate_vk_result(vkBindBufferMemory(Device->Logical, Buffer.Handle, Buffer.Memory, 0),
+                       "vkBindBufferMemory", "failed to bind buffer memory");
 
     return Buffer;
 }
 
 static void
-DestroyBuffer(VkDevice LogicalDevice, buffer *Buffer)
+destroy_buffer(VkDevice LogicalDevice, buffer *Buffer)
 {
     vkDestroyBuffer(LogicalDevice, Buffer->Handle, NULL);
     vkFreeMemory(LogicalDevice, Buffer->Memory, NULL);
 }
 
 static region
-AllocateRegion(buffer *Buffer, u32 Size)
+allocate_region(buffer *Buffer, u32 Size)
 {
     if(Buffer->End + Size > Buffer->Size)
     {
@@ -1071,7 +1041,7 @@ AllocateRegion(buffer *Buffer, u32 Size)
 }
 
 static image
-CreateImage(device *Device, image_info *ImageInfo)
+create_image(device *Device, image_info *ImageInfo)
 {
     image Image = {};
     Image.Width = ImageInfo->Width;
@@ -1098,27 +1068,27 @@ CreateImage(device *Device, image_info *ImageInfo)
     ImageCreateInfo.queueFamilyIndexCount = 0;
     ImageCreateInfo.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
     ImageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    ValidateVkResult(vkCreateImage(Device->Logical, &ImageCreateInfo, NULL, &Image.Handle), "vkCreateImage", "failed to create image");
+    validate_vk_result(vkCreateImage(Device->Logical, &ImageCreateInfo, NULL, &Image.Handle), "vkCreateImage", "failed to create image");
 
     ////////////////////////////////////////////////////////////
     /// Memory Allocation
     ////////////////////////////////////////////////////////////
     VkMemoryRequirements MemoryRequirements = {};
     vkGetImageMemoryRequirements(Device->Logical, Image.Handle, &MemoryRequirements);
-    Image.Memory = AllocateDeviceMemory(Device, &MemoryRequirements, ImageInfo->MemoryPropertyFlags);
-    ValidateVkResult(vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0),
-                     "vkBindImageMemory", "failed to bind image memory");
+    Image.Memory = allocate_device_memory(Device, &MemoryRequirements, ImageInfo->MemoryPropertyFlags);
+    validate_vk_result(vkBindImageMemory(Device->Logical, Image.Handle, Image.Memory, 0),
+                       "vkBindImageMemory", "failed to bind image memory");
 
     ////////////////////////////////////////////////////////////
     /// View
     ////////////////////////////////////////////////////////////
-    Image.View = CreateImageView(Device->Logical, Image.Handle, Image.Format, ImageInfo->AspectMask);
+    Image.View = create_image_view(Device->Logical, Image.Handle, Image.Format, ImageInfo->AspectMask);
 
     return Image;
 }
 
 static texture
-CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
+create_texture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
 {
     texture Texture = {};
 
@@ -1142,11 +1112,11 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
     TextureImageConfig.UsageFlags = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     TextureImageConfig.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     TextureImageConfig.AspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    Texture.Image = CreateImage(Device, &TextureImageConfig);
+    Texture.Image = create_image(Device, &TextureImageConfig);
 
     // Write to texture image.
-    WriteToHostRegion(Device->Logical, StagingRegion, ImageData, Texture.Image.Width * Texture.Image.Height * IMAGE_CHANNELS, 0);
-    TransitionImageLayout(Device, CommandPool, &Texture.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    write_to_host_region(Device->Logical, StagingRegion, ImageData, Texture.Image.Width * Texture.Image.Height * IMAGE_CHANNELS, 0);
+    transition_image_layout(Device, CommandPool, &Texture.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VkBufferImageCopy BufferImageCopyRegions[1] = {};
     BufferImageCopyRegions[0].bufferOffset = 0;//StagingRegion->Offset;
     BufferImageCopyRegions[0].bufferRowLength = 0;
@@ -1161,13 +1131,13 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
     BufferImageCopyRegions[0].imageExtent.width = Texture.Image.Width;
     BufferImageCopyRegions[0].imageExtent.height = Texture.Image.Height;
     BufferImageCopyRegions[0].imageExtent.depth = 1;
-    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+    VkCommandBuffer CommandBuffer = begin_one_time_command_buffer(Device->Logical, CommandPool);
         vkCmdCopyBufferToImage(CommandBuffer, StagingRegion->Buffer->Handle,
                                Texture.Image.Handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                CTK_ARRAY_COUNT(BufferImageCopyRegions), BufferImageCopyRegions);
-    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
-    TransitionImageLayout(Device, CommandPool, &Texture.Image,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    submit_one_time_command_buffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+    transition_image_layout(Device, CommandPool, &Texture.Image,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Create texture sampler.
     VkSamplerCreateInfo SamplerCreateInfo = {};
@@ -1187,8 +1157,8 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
     SamplerCreateInfo.mipLodBias = 0.0f;
     SamplerCreateInfo.minLod = 0.0f;
     SamplerCreateInfo.maxLod = 0.0f;
-    ValidateVkResult(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Texture.Sampler),
-                     "vkCreateSampler", "failed to create texture sampler");
+    validate_vk_result(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Texture.Sampler),
+                       "vkCreateSampler", "failed to create texture sampler");
 
     // Cleanup
     stbi_image_free(ImageData);
@@ -1197,7 +1167,7 @@ CreateTexture(device *Device, VkCommandPool CommandPool, region *StagingRegion, 
 }
 
 static VkFramebuffer
-CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_info *FramebufferInfo)
+create_framebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_info *FramebufferInfo)
 {
     VkFramebufferCreateInfo FramebufferCreateInfo = {};
     FramebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1208,13 +1178,13 @@ CreateFramebuffer(VkDevice LogicalDevice, VkRenderPass RenderPass, framebuffer_i
     FramebufferCreateInfo.height = FramebufferInfo->Extent.height;
     FramebufferCreateInfo.layers = FramebufferInfo->Layers;
     VkFramebuffer Framebuffer = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
-                     "vkCreateFramebuffer", "failed to create framebuffer");
+    validate_vk_result(vkCreateFramebuffer(LogicalDevice, &FramebufferCreateInfo, NULL, &Framebuffer),
+                       "vkCreateFramebuffer", "failed to create framebuffer");
     return Framebuffer;
 }
 
 static render_pass
-CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_info *RenderPassInfo)
+create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
     RenderPass.ColorAttachmentCount = 0;
@@ -1224,12 +1194,12 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
     for(u32 AttachmentIndex = 0; AttachmentIndex < RenderPassInfo->Attachments.Count; ++AttachmentIndex)
     {
         attachment *Attachment = RenderPassInfo->Attachments + AttachmentIndex;
-        ctk::Push(&AttachmentDescriptions, Attachment->Description);
+        ctk::push(&AttachmentDescriptions, Attachment->Description);
 
         // Store clear value if attachment uses a clear load operation.
         if(Attachment->Description.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR)
         {
-            ctk::Push(&RenderPass.ClearValues, Attachment->ClearValue);
+            ctk::push(&RenderPass.ClearValues, Attachment->ClearValue);
         }
     }
 
@@ -1237,8 +1207,8 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
     ctk::sarray<VkSubpassDescription, 4> SubpassDescriptions = {};
     for(u32 SubpassIndex = 0; SubpassIndex < RenderPassInfo->Subpasses.Count; ++SubpassIndex)
     {
-        subpass *Subpass = At(&RenderPassInfo->Subpasses, SubpassIndex);
-        VkSubpassDescription *SubpassDescription = ctk::Push(&SubpassDescriptions);
+        subpass *Subpass = ctk::at(&RenderPassInfo->Subpasses, SubpassIndex);
+        VkSubpassDescription *SubpassDescription = ctk::push(&SubpassDescriptions);
         SubpassDescription->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         SubpassDescription->inputAttachmentCount = 0;
         SubpassDescription->pInputAttachments = NULL;
@@ -1249,7 +1219,7 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
         SubpassDescription->preserveAttachmentCount = 0;
         SubpassDescription->pPreserveAttachments = NULL;
 
-        ctk::Todo("HACK: taking largest subpass color attachment reference count as render pass color attachment count");
+        ctk::todo("HACK: taking largest subpass color attachment reference count as render pass color attachment count");
         if(Subpass->ColorAttachmentReferences.Count > RenderPass.ColorAttachmentCount)
         {
             RenderPass.ColorAttachmentCount = Subpass->ColorAttachmentReferences.Count;
@@ -1273,47 +1243,47 @@ CreateRenderPass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_
     RenderPassCreateInfo.pSubpasses = SubpassDescriptions.Data;
     RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
     RenderPassCreateInfo.pDependencies = SubpassDependencies;
-    ValidateVkResult(vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle),
-                     "vkCreateRenderPass", "failed to create render pass");
+    validate_vk_result(vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle),
+                       "vkCreateRenderPass", "failed to create render pass");
 
     // Framebuffers
     u32 FramebufferCount = RenderPassInfo->FramebufferInfos.Count;
     for(u32 FramebufferIndex = 0; FramebufferIndex < FramebufferCount; ++FramebufferIndex)
     {
-        ctk::Push(&RenderPass.Framebuffers,
-                  CreateFramebuffer(LogicalDevice, RenderPass.Handle, RenderPassInfo->FramebufferInfos + FramebufferIndex));
+        ctk::push(&RenderPass.Framebuffers,
+                  create_framebuffer(LogicalDevice, RenderPass.Handle, RenderPassInfo->FramebufferInfos + FramebufferIndex));
     }
 
     // Command Buffers (1 per framebuffer)
     RenderPass.CommandBuffers.Count = FramebufferCount;
-    AllocateCommandBuffers(LogicalDevice, CommandPool, FramebufferCount, RenderPass.CommandBuffers.Data);
+    allocate_command_buffers(LogicalDevice, CommandPool, FramebufferCount, RenderPass.CommandBuffers.Data);
 
     return RenderPass;
 }
 
 static shader_module
-CreateShaderModule(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit)
+create_shader_module(VkDevice LogicalDevice, cstr Path, VkShaderStageFlagBits StageBit)
 {
     shader_module ShaderModule = {};
     ShaderModule.StageBit = StageBit;
-    ctk::array<u8> ShaderByteCode = ctk::ReadFile<u8>(Path);
+    ctk::array<u8> ShaderByteCode = ctk::read_file<u8>(Path);
 
     VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
     ShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     ShaderModuleCreateInfo.flags = 0;
-    ShaderModuleCreateInfo.codeSize = ByteSize(&ShaderByteCode);
+    ShaderModuleCreateInfo.codeSize = ctk::byte_size(&ShaderByteCode);
     ShaderModuleCreateInfo.pCode = (u32 const *)ShaderByteCode.Data;
-    ValidateVkResult(vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle),
-                     "vkCreateShaderModule", "failed to create shader module");
+    validate_vk_result(vkCreateShaderModule(LogicalDevice, &ShaderModuleCreateInfo, NULL, &ShaderModule.Handle),
+                       "vkCreateShaderModule", "failed to create shader module");
 
     // Cleanup
-    ctk::Free(&ShaderByteCode);
+    ctk::_free(&ShaderByteCode);
 
     return ShaderModule;
 }
 
 static u32
-PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
+push_vertex_attribute(vertex_layout *VertexLayout, u32 ElementCount)
 {
     static VkFormat FORMATS[] =
     {
@@ -1325,13 +1295,13 @@ PushVertexAttribute(vertex_layout *VertexLayout, u32 ElementCount)
     CTK_ASSERT(ElementCount <= CTK_ARRAY_COUNT(FORMATS));
     u32 AttributeSize = sizeof(f32) * ElementCount;
     u32 AttributeIndex = VertexLayout->Attributes.Count;
-    ctk::Push(&VertexLayout->Attributes, { FORMATS[ElementCount - 1], AttributeSize, VertexLayout->Size });
+    ctk::push(&VertexLayout->Attributes, { FORMATS[ElementCount - 1], AttributeSize, VertexLayout->Size });
     VertexLayout->Size += AttributeSize;
     return AttributeIndex;
 }
 
 static graphics_pipeline
-CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
+create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
 {
     graphics_pipeline GraphicsPipeline = {};
 
@@ -1343,7 +1313,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     {
         shader_module *ShaderModule = GraphicsPipelineInfo->ShaderModules[ShaderModuleIndex];
 
-        VkPipelineShaderStageCreateInfo *ShaderStageCreateInfo = ctk::Push(&ShaderStages);
+        VkPipelineShaderStageCreateInfo *ShaderStageCreateInfo = ctk::push(&ShaderStages);
         ShaderStageCreateInfo->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         ShaderStageCreateInfo->flags = 0;
         ShaderStageCreateInfo->stage = ShaderModule->StageBit;
@@ -1358,10 +1328,10 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     ctk::sarray<VkVertexInputAttributeDescription, 4> VertexAttributeDescriptions = {};
     for(u32 InputIndex = 0; InputIndex < GraphicsPipelineInfo->VertexInputs.Count; ++InputIndex)
     {
-        vertex_input *VertexInput = At(&GraphicsPipelineInfo->VertexInputs, InputIndex);
+        vertex_input *VertexInput = ctk::at(&GraphicsPipelineInfo->VertexInputs, InputIndex);
         vertex_attribute *VertexAttribute = GraphicsPipelineInfo->VertexLayout->Attributes + VertexInput->AttributeIndex;
 
-        VkVertexInputAttributeDescription *AttributeDescription = ctk::Push(&VertexAttributeDescriptions);
+        VkVertexInputAttributeDescription *AttributeDescription = ctk::push(&VertexAttributeDescriptions);
         AttributeDescription->location = VertexInput->Location;
         AttributeDescription->binding = VertexInput->Binding;
         AttributeDescription->format = VertexAttribute->Format;
@@ -1369,7 +1339,7 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     }
 
     ctk::sarray<VkVertexInputBindingDescription, 4> VertexBindingDescriptions = {};
-    VkVertexInputBindingDescription *BindingDescription = ctk::Push(&VertexBindingDescriptions);
+    VkVertexInputBindingDescription *BindingDescription = ctk::push(&VertexBindingDescriptions);
     BindingDescription->binding = 0;
     BindingDescription->stride = GraphicsPipelineInfo->VertexLayout->Size;
     BindingDescription->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
@@ -1454,11 +1424,11 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     MultisampleState.alphaToCoverageEnable = VK_FALSE;
     MultisampleState.alphaToOneEnable = VK_FALSE;
 
-    ctk::Todo("HACK: duplicated color blend states for each color attachment in render pass");
+    ctk::todo("HACK: duplicated color blend states for each color attachment in render pass");
     ctk::sarray<VkPipelineColorBlendAttachmentState, 4> ColorBlendAttachmentStates = {};
     CTK_REPEAT(RenderPass->ColorAttachmentCount)
     {
-        VkPipelineColorBlendAttachmentState *ColorBlendAttachmentState = ctk::Push(&ColorBlendAttachmentStates);
+        VkPipelineColorBlendAttachmentState *ColorBlendAttachmentState = ctk::push(&ColorBlendAttachmentStates);
         ColorBlendAttachmentState->blendEnable = VK_FALSE;
         ColorBlendAttachmentState->srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
         ColorBlendAttachmentState->dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
@@ -1492,8 +1462,8 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     LayoutCreateInfo.pSetLayouts = GraphicsPipelineInfo->DescriptorSetLayouts.Data;
     LayoutCreateInfo.pushConstantRangeCount = 0;
     LayoutCreateInfo.pPushConstantRanges = NULL;
-    ValidateVkResult(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),
-                     "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
+    validate_vk_result(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),
+                       "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
@@ -1516,66 +1486,89 @@ CreateGraphicsPipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics
     GraphicsPipelineCreateInfo.subpass = 0;
     GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex = -1;
-    ValidateVkResult(vkCreateGraphicsPipelines(LogicalDevice, VK_NULL_HANDLE, 1, &GraphicsPipelineCreateInfo, NULL,
-                                               &GraphicsPipeline.Handle),
-                     "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
+    validate_vk_result(vkCreateGraphicsPipelines(LogicalDevice, VK_NULL_HANDLE, 1, &GraphicsPipelineCreateInfo, NULL,
+                                                 &GraphicsPipeline.Handle),
+                       "vkCreateGraphicsPipelines", "failed to create graphics pipeline");
 
     return GraphicsPipeline;
 }
 
+static VkSemaphore
+create_semaphore(VkDevice LogicalDevice)
+{
+    VkSemaphoreCreateInfo SemaphoreCreateInfo = {};
+    SemaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    SemaphoreCreateInfo.flags = 0;
+    VkSemaphore Semaphore = VK_NULL_HANDLE;
+    validate_vk_result(vkCreateSemaphore(LogicalDevice, &SemaphoreCreateInfo, NULL, &Semaphore),
+                       "vkCreateSemaphore", "failed to create semaphore");
+    return Semaphore;
+}
+
+static VkFence
+create_fence(VkDevice LogicalDevice)
+{
+    VkFenceCreateInfo FenceCreateInfo = {};
+    FenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    FenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VkFence Fence = VK_NULL_HANDLE;
+    validate_vk_result(vkCreateFence(LogicalDevice, &FenceCreateInfo, NULL, &Fence), "vkCreateFence", "failed to create fence");
+    return Fence;
+}
+
 static frame_state
-CreateFrameState(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount)
+create_frame_state(VkDevice LogicalDevice, u32 FrameCount, u32 SwapchainImageCount)
 {
     frame_state FrameState = {};
     CTK_REPEAT(FrameCount)
     {
-        frame *Frame = ctk::Push(&FrameState.Frames);
-        Frame->ImageAquiredSemaphore = CreateSemaphore(LogicalDevice);
-        Frame->RenderFinishedSemaphore = CreateSemaphore(LogicalDevice);
-        Frame->InFlightFence = CreateFence(LogicalDevice);
+        frame *Frame = ctk::push(&FrameState.Frames);
+        Frame->ImageAquiredSemaphore = create_semaphore(LogicalDevice);
+        Frame->RenderFinishedSemaphore = create_semaphore(LogicalDevice);
+        Frame->InFlightFence = create_fence(LogicalDevice);
     }
     CTK_REPEAT(SwapchainImageCount)
     {
-        ctk::Push(&FrameState.PreviousFrameInFlightFences, (VkFence)VK_NULL_HANDLE);
+        ctk::push(&FrameState.PreviousFrameInFlightFences, (VkFence)VK_NULL_HANDLE);
     }
     return FrameState;
 }
 
 static void
-WriteToHostRegion(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
+write_to_host_region(VkDevice LogicalDevice, region *Region, void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
     if(OffsetIntoRegion + Size > Region->Size)
     {
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", Size, OffsetIntoRegion, Region->Size);
     }
     void *MappedMemory = NULL;
-    ValidateVkResult(vkMapMemory(LogicalDevice, Region->Buffer->Memory, Region->Offset + OffsetIntoRegion, Size, 0, &MappedMemory),
-                     "vkMapMemory", "failed to map host coherent buffer to host memory");
+    validate_vk_result(vkMapMemory(LogicalDevice, Region->Buffer->Memory, Region->Offset + OffsetIntoRegion, Size, 0, &MappedMemory),
+                       "vkMapMemory", "failed to map host coherent buffer to host memory");
     memcpy(MappedMemory, Data, Size);
     vkUnmapMemory(LogicalDevice, Region->Buffer->Memory);
 }
 
 static void
-WriteToDeviceRegion(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
+write_to_device_region(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
                     void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
     if(OffsetIntoRegion + Size > Region->Size)
     {
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", Size, OffsetIntoRegion, Region->Size);
     }
-    WriteToHostRegion(Device->Logical, StagingRegion, Data, Size, 0);
+    write_to_host_region(Device->Logical, StagingRegion, Data, Size, 0);
     VkBufferCopy BufferCopyRegions[1] = {};
     BufferCopyRegions[0].srcOffset = StagingRegion->Offset;
     BufferCopyRegions[0].dstOffset = Region->Offset + OffsetIntoRegion;
     BufferCopyRegions[0].size = Size;
-    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+    VkCommandBuffer CommandBuffer = begin_one_time_command_buffer(Device->Logical, CommandPool);
         vkCmdCopyBuffer(CommandBuffer, StagingRegion->Buffer->Handle, Region->Buffer->Handle,
                         CTK_ARRAY_COUNT(BufferCopyRegions), BufferCopyRegions);
-    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+    submit_one_time_command_buffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
 }
 
 static VkFormat
-FindDepthImageFormat(VkPhysicalDevice PhysicalDevice)
+find_depth_image_format(VkPhysicalDevice PhysicalDevice)
 {
     static VkFormat const DEPTH_IMAGE_FORMATS[] =
     {
@@ -1623,9 +1616,9 @@ struct image_memory_pipeline_stage_mask
 };
 
 static void
-InsertImageMemoryBarrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
-                         image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
-                         image_memory_pipeline_stage_mask PipelineStageMask)
+insert_image_memory_barrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
+                            image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
+                            image_memory_pipeline_stage_mask PipelineStageMask)
 {
     VkImageMemoryBarrier ImageMemoryBarrier = {};
     ImageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1651,7 +1644,7 @@ InsertImageMemoryBarrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAs
 }
 
 static void
-TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout)
+transition_image_layout(device *Device, VkCommandPool CommandPool, image *Image, VkImageLayout OldLayout, VkImageLayout NewLayout)
 {
     // Calculate source/destination access mask and pipeline stage mask.
     VkAccessFlags SourceAccessMask = 0;
@@ -1726,7 +1719,7 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
     ImageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
     ImageMemoryBarrier.subresourceRange.layerCount = 1;
 
-    VkCommandBuffer CommandBuffer = BeginOneTimeCommandBuffer(Device->Logical, CommandPool);
+    VkCommandBuffer CommandBuffer = begin_one_time_command_buffer(Device->Logical, CommandPool);
         vkCmdPipelineBarrier(CommandBuffer,
                              SourcePipelineStageMask,
                              DestinationPipelineStageMask,
@@ -1737,25 +1730,25 @@ TransitionImageLayout(device *Device, VkCommandPool CommandPool, image *Image, V
                              NULL, // Buffer Memory Barriers
                              1, // Image Memory Count
                              &ImageMemoryBarrier); // Image Memory Barriers
-    SubmitOneTimeCommandBuffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
+    submit_one_time_command_buffer(Device->Logical, Device->GraphicsQueue, CommandPool, CommandBuffer);
     Image->Layout = NewLayout;
 }
 
 static uniform_buffer
-CreateUniformBuffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
+create_uniform_buffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
 {
     CTK_ASSERT(InstanceCount > 0)
     uniform_buffer UniformBuffer = {};
     UniformBuffer.ElementSize = ElementSize;
     CTK_REPEAT(InstanceCount)
     {
-        ctk::Push(&UniformBuffer.Regions, AllocateRegion(Buffer, ElementCount * ElementSize));
+        ctk::push(&UniformBuffer.Regions, allocate_region(Buffer, ElementCount * ElementSize));
     }
     return UniformBuffer;
 }
 
 static VkDescriptorPool
-CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount)
+create_descriptor_pool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount)
 {
     // Calculate total count of descriptors of each type for all descriptor sets.
     ctk::sarray<VkDescriptorPoolSize, 4> DescriptorPoolSizes = {};
@@ -1777,7 +1770,7 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetI
             }
             if(SelectedDescriptorPoolSize == NULL)
             {
-                SelectedDescriptorPoolSize = ctk::Push(&DescriptorPoolSizes);
+                SelectedDescriptorPoolSize = ctk::push(&DescriptorPoolSizes);
                 SelectedDescriptorPoolSize->type = DescriptorInfo->Type;
             }
             SelectedDescriptorPoolSize->descriptorCount += DescriptorInfo->Count * DescriptorSetInfo->InstanceCount;
@@ -1798,15 +1791,15 @@ CreateDescriptorPool(VkDevice LogicalDevice, descriptor_set_info *DescriptorSetI
     DescriptorPoolCreateInfo.poolSizeCount = DescriptorPoolSizes.Count;
     DescriptorPoolCreateInfo.pPoolSizes = DescriptorPoolSizes.Data;
     VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
-    ValidateVkResult(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
-                     "vkCreateDescriptorPool", "failed to create descriptor pool");
+    validate_vk_result(vkCreateDescriptorPool(LogicalDevice, &DescriptorPoolCreateInfo, NULL, &DescriptorPool),
+                       "vkCreateDescriptorPool", "failed to create descriptor pool");
     return DescriptorPool;
 }
 
 static void
-CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
-                     descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount,
-                     descriptor_set *DescriptorSets)
+create_descriptor_sets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
+                       descriptor_set_info *DescriptorSetInfos, u32 DescriptorSetInfoCount,
+                       descriptor_set *DescriptorSets)
 {
     for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfoCount; ++DescriptorSetIndex)
     {
@@ -1837,7 +1830,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
             descriptor_info *DescriptorInfo = DescriptorSetInfo->DescriptorBindings[DescriptorIndex].Info;
             if(DescriptorInfo->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
             {
-                ctk::Push(&DescriptorSet->DynamicOffsets, DescriptorInfo->UniformBuffer->ElementSize);
+                ctk::push(&DescriptorSet->DynamicOffsets, DescriptorInfo->UniformBuffer->ElementSize);
             }
         }
 
@@ -1846,7 +1839,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         for(u32 DescriptorIndex = 0; DescriptorIndex < DescriptorSetInfo->DescriptorBindings.Count; ++DescriptorIndex)
         {
             descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
-            VkDescriptorSetLayoutBinding *DescriptorSetLayoutBinding = ctk::Push(&DescriptorSetLayoutBindings);
+            VkDescriptorSetLayoutBinding *DescriptorSetLayoutBinding = ctk::push(&DescriptorSetLayoutBindings);
             DescriptorSetLayoutBinding->binding = DescriptorBinding->Index;
             DescriptorSetLayoutBinding->descriptorType = DescriptorBinding->Info->Type;
             DescriptorSetLayoutBinding->descriptorCount = DescriptorBinding->Info->Count;
@@ -1858,14 +1851,14 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         DescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         DescriptorSetLayoutCreateInfo.bindingCount = DescriptorSetLayoutBindings.Count;
         DescriptorSetLayoutCreateInfo.pBindings = DescriptorSetLayoutBindings.Data;
-        ValidateVkResult(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSet->Layout),
-                         "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
+        validate_vk_result(vkCreateDescriptorSetLayout(LogicalDevice, &DescriptorSetLayoutCreateInfo, NULL, &DescriptorSet->Layout),
+                           "vkCreateDescriptorSetLayout", "error creating descriptor set layout");
 
         // Duplicate layout for each instance.
         ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts = {};
         CTK_REPEAT(DescriptorSetInfo->InstanceCount)
         {
-            ctk::Push(&DescriptorSetLayouts, DescriptorSet->Layout);
+            ctk::push(&DescriptorSetLayouts, DescriptorSet->Layout);
         }
 
         // Allocate descriptor set instances.
@@ -1874,8 +1867,8 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
         DescriptorSetAllocateInfo.descriptorPool = DescriptorPool;
         DescriptorSetAllocateInfo.descriptorSetCount = DescriptorSetLayouts.Count;
         DescriptorSetAllocateInfo.pSetLayouts = DescriptorSetLayouts.Data;
-        ValidateVkResult(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSet->Instances.Data),
-                         "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
+        validate_vk_result(vkAllocateDescriptorSets(LogicalDevice, &DescriptorSetAllocateInfo, DescriptorSet->Instances.Data),
+                           "vkAllocateDescriptorSets", "failed to allocate descriptor sets");
         DescriptorSet->Instances.Count = DescriptorSetLayouts.Count;
 
         // Update descriptor set instances with their associated data.
@@ -1888,7 +1881,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
             {
                 descriptor_binding *DescriptorBinding = DescriptorSetInfo->DescriptorBindings + DescriptorIndex;
                 descriptor_info *DescriptorInfo = DescriptorBinding->Info;
-                VkWriteDescriptorSet *WriteDescriptorSet = ctk::Push(&WriteDescriptorSets);
+                VkWriteDescriptorSet *WriteDescriptorSet = ctk::push(&WriteDescriptorSets);
                 WriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 WriteDescriptorSet->dstSet = DescriptorSet->Instances[InstanceIndex];
                 WriteDescriptorSet->dstBinding = DescriptorBinding->Index;
@@ -1905,11 +1898,11 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
                     // bind the only uniform buffer region to each descriptor set instance.
                     u32 UniformBufferRegionIndex = UniformBuffer->Regions.Count == DescriptorSet->Instances.Count ? InstanceIndex : 0;
 
-                    region *UniformBufferRegion = At(&UniformBuffer->Regions, UniformBufferRegionIndex);
+                    region *UniformBufferRegion = ctk::at(&UniformBuffer->Regions, UniformBufferRegionIndex);
                     WriteDescriptorSet->pBufferInfo = DescriptorBufferInfos.Data + DescriptorBufferInfos.Count;
                     for(u32 DescriptorElementIndex = 0; DescriptorElementIndex < DescriptorInfo->Count; ++DescriptorElementIndex)
                     {
-                        VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::Push(&DescriptorBufferInfos);
+                        VkDescriptorBufferInfo *DescriptorBufferInfo = ctk::push(&DescriptorBufferInfos);
                         DescriptorBufferInfo->buffer = UniformBufferRegion->Buffer->Handle;
 
                         // Map each element in descriptor to its UniformBuffer->ElementSize offset in uniform buffer region.
@@ -1921,7 +1914,7 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
                 else if(WriteDescriptorSet->descriptorType == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                 {
                     texture *Texture = DescriptorInfo->Texture;
-                    VkDescriptorImageInfo *DescriptorImageInfo = ctk::Push(&DescriptorImageInfos);
+                    VkDescriptorImageInfo *DescriptorImageInfo = ctk::push(&DescriptorImageInfos);
                     DescriptorImageInfo->sampler = Texture->Sampler;
                     DescriptorImageInfo->imageView = Texture->Image.View;
                     DescriptorImageInfo->imageLayout = Texture->Image.Layout;
@@ -1934,8 +1927,8 @@ CreateDescriptorSets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 }
 
 static void
-BindDescriptorSets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipelineLayout,
-                   descriptor_set **DescriptorSets, u32 DescriptorSetCount, u32 InstanceIndex, u32 DynamicIndex = 0)
+bind_descriptor_sets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipelineLayout,
+                     descriptor_set **DescriptorSets, u32 DescriptorSetCount, u32 InstanceIndex, u32 DynamicIndex = 0)
 {
     ctk::sarray<VkDescriptorSet, 4> DescriptorSetsToBind = {};
     ctk::sarray<u32, 16> DynamicOffsets = {};
@@ -1943,10 +1936,10 @@ BindDescriptorSets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipel
     {
         descriptor_set *DescriptorSet = DescriptorSets[DescriptorSetIndex];
         u32 DescriptorSetInstanceIndex = DescriptorSet->Instances.Count > 1 ? InstanceIndex : 0;
-        ctk::Push(&DescriptorSetsToBind, DescriptorSet->Instances[DescriptorSetInstanceIndex]);
+        ctk::push(&DescriptorSetsToBind, DescriptorSet->Instances[DescriptorSetInstanceIndex]);
         for(u32 DynamicOffsetIndex = 0; DynamicOffsetIndex < DescriptorSet->DynamicOffsets.Count; ++DynamicOffsetIndex)
         {
-            ctk::Push(&DynamicOffsets, DescriptorSet->DynamicOffsets[DynamicOffsetIndex] * DynamicIndex);
+            ctk::push(&DynamicOffsets, DescriptorSet->DynamicOffsets[DynamicOffsetIndex] * DynamicIndex);
         }
     }
     vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipelineLayout,
@@ -1958,7 +1951,7 @@ BindDescriptorSets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipel
 }
 
 static VkDescriptorType
-GetVkDescriptorType(cstr Name)
+get_vk_descriptor_type(cstr Name)
 {
     static ctk::pair<cstr, VkDescriptorType> DESCRIPTOR_TYPES[] =
     {
@@ -1977,7 +1970,7 @@ GetVkDescriptorType(cstr Name)
         // CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR),
         CTK_VALUE_NAME_PAIR(VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV),
     };
-    auto DescriptorType = ctk::FindPair(DESCRIPTOR_TYPES, CTK_ARRAY_COUNT(DESCRIPTOR_TYPES), Name, ctk::StringEqual);
+    auto DescriptorType = ctk::find_pair(DESCRIPTOR_TYPES, CTK_ARRAY_COUNT(DESCRIPTOR_TYPES), Name, ctk::equal);
     if(!DescriptorType)
     {
         CTK_FATAL("failed to find VkDescriptorType type for \"%s\"", Name)
@@ -1986,7 +1979,7 @@ GetVkDescriptorType(cstr Name)
 }
 
 static VkShaderStageFlagBits
-GetVkShaderStageFlagBits(cstr Name)
+get_vk_shader_stage_flag_bits(cstr Name)
 {
     static ctk::pair<cstr, VkShaderStageFlagBits> SHADER_STAGES[] =
     {
@@ -2013,7 +2006,7 @@ GetVkShaderStageFlagBits(cstr Name)
         CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_INTERSECTION_BIT_NV),
         CTK_VALUE_NAME_PAIR(VK_SHADER_STAGE_CALLABLE_BIT_NV),
     };
-    auto ShaderStage = ctk::FindPair(SHADER_STAGES, CTK_ARRAY_COUNT(SHADER_STAGES), Name, ctk::StringEqual);
+    auto ShaderStage = ctk::find_pair(SHADER_STAGES, CTK_ARRAY_COUNT(SHADER_STAGES), Name, ctk::equal);
     if(!ShaderStage)
     {
         CTK_FATAL("failed to find VkShaderStageFlagBits for \"%s\"", Name)
@@ -2022,14 +2015,14 @@ GetVkShaderStageFlagBits(cstr Name)
 }
 
 static VkBool32
-GetVkBool32(cstr Name)
+get_vk_bool_32(cstr Name)
 {
     static ctk::pair<cstr, VkBool32> BOOLS[] =
     {
         CTK_VALUE_NAME_PAIR(VK_TRUE),
         CTK_VALUE_NAME_PAIR(VK_FALSE),
     };
-    auto VkBool = ctk::FindPair(BOOLS, CTK_ARRAY_COUNT(BOOLS), Name, ctk::StringEqual);
+    auto VkBool = ctk::find_pair(BOOLS, CTK_ARRAY_COUNT(BOOLS), Name, ctk::equal);
     if(!VkBool)
     {
         CTK_FATAL("failed to find VkBool32 for \"%s\"", Name)
@@ -2038,7 +2031,7 @@ GetVkBool32(cstr Name)
 }
 
 static VkPrimitiveTopology
-GetVkPrimitiveTopology(cstr Name)
+get_vk_primitive_topology(cstr Name)
 {
     static ctk::pair<cstr, VkPrimitiveTopology> PRIMITIVE_TOPOLOGIES[] =
     {
@@ -2054,7 +2047,7 @@ GetVkPrimitiveTopology(cstr Name)
         CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY),
         CTK_VALUE_NAME_PAIR(VK_PRIMITIVE_TOPOLOGY_PATCH_LIST),
     };
-    auto PrimitiveTopology = ctk::FindPair(PRIMITIVE_TOPOLOGIES, CTK_ARRAY_COUNT(PRIMITIVE_TOPOLOGIES), Name, ctk::StringEqual);
+    auto PrimitiveTopology = ctk::find_pair(PRIMITIVE_TOPOLOGIES, CTK_ARRAY_COUNT(PRIMITIVE_TOPOLOGIES), Name, ctk::equal);
     if(!PrimitiveTopology)
     {
         CTK_FATAL("failed to find VkPrimitiveTopology for \"%s\"", Name)
@@ -2063,19 +2056,29 @@ GetVkPrimitiveTopology(cstr Name)
 }
 
 static VkFilter
-GetVkFilter(cstr Name)
+get_vk_filter(cstr Name)
 {
     static ctk::pair<cstr, VkFilter> FILTERS[] =
     {
         CTK_VALUE_NAME_PAIR(VK_FILTER_NEAREST),
         CTK_VALUE_NAME_PAIR(VK_FILTER_LINEAR),
     };
-    auto Filter = ctk::FindPair(FILTERS, CTK_ARRAY_COUNT(FILTERS), Name, ctk::StringEqual);
+    auto Filter = ctk::find_pair(FILTERS, CTK_ARRAY_COUNT(FILTERS), Name, ctk::equal);
     if(!Filter)
     {
         CTK_FATAL("failed to find VkFilter for \"%s\"", Name)
     }
     return Filter->Value;
+}
+
+static void
+validate_vk_result(VkResult Result, cstr FunctionName, cstr FailureMessage)
+{
+    if(Result != VK_SUCCESS)
+    {
+        output_vk_result(Result, FunctionName);
+        CTK_FATAL(FailureMessage)
+    }
 }
 
 } // vtk

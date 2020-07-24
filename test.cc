@@ -93,7 +93,7 @@ s32
 main()
 {
     app_state AppState = {};
-    ctk::data Config = ctk::LoadData("test_assets/test_config.ctkd");
+    ctk::data Config = ctk::load_data("test_assets/test_config.ctkd");
 
     ////////////////////////////////////////////////////////////
     /// Window
@@ -105,15 +105,15 @@ main()
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    GLFWwindow *Window = glfwCreateWindow(S32(&Config, "window.width"),
-                                          S32(&Config, "window.height"),
-                                          CStr(&Config, "window.title"),
+    GLFWwindow *Window = glfwCreateWindow(ctk::to_s32(&Config, "window.width"),
+                                          ctk::to_s32(&Config, "window.height"),
+                                          ctk::to_cstr(&Config, "window.title"),
                                           NULL, NULL);
     if(Window == NULL)
     {
         CTK_FATAL("failed to create window")
     }
-    glfwSetWindowPos(Window, S32(&Config, "window.x"), S32(&Config, "window.y"));
+    glfwSetWindowPos(Window, ctk::to_s32(&Config, "window.x"), ctk::to_s32(&Config, "window.y"));
     glfwSetWindowUserPointer(Window, (void *)&AppState);
     // glfwSetFramebufferSizeCallback(Window, FramebufferResizeCallback);
     glfwSetKeyCallback(Window, KeyCallback);
@@ -127,34 +127,34 @@ main()
     u32 GLFWExtensionCount = 0;
     cstr *GLFWExtensions = glfwGetRequiredInstanceExtensions(&GLFWExtensionCount);
     vtk::instance_info InstanceInfo = {};
-    ctk::Push(&InstanceInfo.Extensions, GLFWExtensions, GLFWExtensionCount);
-    InstanceInfo.Debug = ctk::B32(&Config, "debug");
-    InstanceInfo.AppName = ctk::CStr(&Config, "app_name");
-    vtk::instance Instance = vtk::CreateInstance(&InstanceInfo);
+    ctk::push(&InstanceInfo.Extensions, GLFWExtensions, GLFWExtensionCount);
+    InstanceInfo.Debug = ctk::to_b32(&Config, "debug");
+    InstanceInfo.AppName = ctk::to_cstr(&Config, "app_name");
+    vtk::instance Instance = vtk::create_instance(&InstanceInfo);
 
     // Platform Surface
     VkSurfaceKHR PlatformSurface = {};
     VkResult Result = glfwCreateWindowSurface(Instance.Handle, Window, NULL, &PlatformSurface);
-    vtk::ValidateVkResult(Result, "glfwCreateWindowSurface", "failed to create GLFW surface");
+    vtk::validate_vk_result(Result, "glfwCreateWindowSurface", "failed to create GLFW surface");
 
     // Device
     vtk::device_info DeviceInfo = {};
-    Push(&DeviceInfo.Extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME); // Swapchains required for rendering.
+    push(&DeviceInfo.Extensions, VK_KHR_SWAPCHAIN_EXTENSION_NAME); // Swapchains required for rendering.
     DeviceInfo.Features.geometryShader = VK_TRUE;
     DeviceInfo.Features.samplerAnisotropy = VK_TRUE;
     // DeviceInfo.Features.vertexPipelineStoresAndAtomics = VK_TRUE;
-    vtk::device Device = vtk::CreateDevice(Instance.Handle, PlatformSurface, &DeviceInfo);
+    vtk::device Device = vtk::create_device(Instance.Handle, PlatformSurface, &DeviceInfo);
 
     // Swapchain
-    vtk::swapchain Swapchain = vtk::CreateSwapchain(&Device, PlatformSurface);
+    vtk::swapchain Swapchain = vtk::create_swapchain(&Device, PlatformSurface);
 
     // Graphics Command Pool
-    VkCommandPool GraphicsCommandPool = vtk::CreateCommandPool(Device.Logical, Device.QueueFamilyIndexes.Graphics);
+    VkCommandPool GraphicsCommandPool = vtk::create_command_pool(Device.Logical, Device.QueueFamilyIndexes.Graphics);
 
     ////////////////////////////////////////////////////////////
     /// Frame State
     ////////////////////////////////////////////////////////////
-    vtk::frame_state FrameState = vtk::CreateFrameState(Device.Logical, 2, Swapchain.Images.Count);
+    vtk::frame_state FrameState = vtk::create_frame_state(Device.Logical, 2, Swapchain.Images.Count);
 
     ////////////////////////////////////////////////////////////
     /// Depth Image
@@ -162,13 +162,13 @@ main()
     vtk::image_info DepthImageInfo = {};
     DepthImageInfo.Width = Swapchain.Extent.width;
     DepthImageInfo.Height = Swapchain.Extent.height;
-    DepthImageInfo.Format = vtk::FindDepthImageFormat(Device.Physical);
+    DepthImageInfo.Format = vtk::find_depth_image_format(Device.Physical);
     DepthImageInfo.Tiling = VK_IMAGE_TILING_OPTIMAL;
     DepthImageInfo.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     DepthImageInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     DepthImageInfo.AspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    vtk::image DepthImage = vtk::CreateImage(&Device, &DepthImageInfo);
-    vtk::TransitionImageLayout(&Device, GraphicsCommandPool, &DepthImage,
+    vtk::image DepthImage = vtk::create_image(&Device, &DepthImageInfo);
+    vtk::transition_image_layout(&Device, GraphicsCommandPool, &DepthImage,
                                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     ////////////////////////////////////////////////////////////
@@ -178,7 +178,7 @@ main()
 
     // Attachments
     u32 ColorAttachmentIndex = RenderPassInfo.Attachments.Count;
-    vtk::attachment *ColorAttachment = ctk::Push(&RenderPassInfo.Attachments);
+    vtk::attachment *ColorAttachment = ctk::push(&RenderPassInfo.Attachments);
     ColorAttachment->Description.format = Swapchain.ImageFormat;
     ColorAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
     ColorAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
@@ -190,7 +190,7 @@ main()
     ColorAttachment->ClearValue = { 0.04f, 0.04f, 0.04f, 1.0f };
 
     u32 DepthAttachmentIndex = RenderPassInfo.Attachments.Count;
-    vtk::attachment *DepthAttachment = ctk::Push(&RenderPassInfo.Attachments);
+    vtk::attachment *DepthAttachment = ctk::push(&RenderPassInfo.Attachments);
     DepthAttachment->Description.format = DepthImage.Format;
     DepthAttachment->Description.samples = VK_SAMPLE_COUNT_1_BIT;
     DepthAttachment->Description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear color attachment before drawing.
@@ -202,9 +202,9 @@ main()
     DepthAttachment->ClearValue = { 1.0f, 0 };
 
     // Subpasses
-    vtk::subpass *Subpass = ctk::Push(&RenderPassInfo.Subpasses);
+    vtk::subpass *Subpass = ctk::push(&RenderPassInfo.Subpasses);
 
-    VkAttachmentReference *ColorAttachmentReference = ctk::Push(&Subpass->ColorAttachmentReferences);
+    VkAttachmentReference *ColorAttachmentReference = ctk::push(&Subpass->ColorAttachmentReferences);
     ColorAttachmentReference->attachment = ColorAttachmentIndex;
     ColorAttachmentReference->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
@@ -215,30 +215,30 @@ main()
     // Framebuffer Infos
     for(u32 FramebufferIndex = 0; FramebufferIndex < Swapchain.Images.Count; ++FramebufferIndex)
     {
-        vtk::framebuffer_info *FramebufferInfo = ctk::Push(&RenderPassInfo.FramebufferInfos);
-        ctk::Push(&FramebufferInfo->Attachments, Swapchain.Images[FramebufferIndex].View);
-        ctk::Push(&FramebufferInfo->Attachments, DepthImage.View);
+        vtk::framebuffer_info *FramebufferInfo = ctk::push(&RenderPassInfo.FramebufferInfos);
+        ctk::push(&FramebufferInfo->Attachments, Swapchain.Images[FramebufferIndex].View);
+        ctk::push(&FramebufferInfo->Attachments, DepthImage.View);
         FramebufferInfo->Extent = Swapchain.Extent;
         FramebufferInfo->Layers = 1;
     }
 
     // Creation
-    vtk::render_pass RenderPass = vtk::CreateRenderPass(Device.Logical, GraphicsCommandPool, &RenderPassInfo);
+    vtk::render_pass RenderPass = vtk::create_render_pass(Device.Logical, GraphicsCommandPool, &RenderPassInfo);
 
     ////////////////////////////////////////////////////////////
     /// Shader Modules
     ////////////////////////////////////////////////////////////
     vtk::shader_module VertexShader =
-        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        vtk::create_shader_module(Device.Logical, "test_assets/shaders/shader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
     vtk::shader_module FragmentShader =
-        vtk::CreateShaderModule(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        vtk::create_shader_module(Device.Logical, "test_assets/shaders/shader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     ////////////////////////////////////////////////////////////
     /// Vertex Layout
     ////////////////////////////////////////////////////////////
     vtk::vertex_layout VertexLayout = {};
-    u32 VertexPositionIndex = vtk::PushVertexAttribute(&VertexLayout, 3);
-    u32 VertexUVIndex = vtk::PushVertexAttribute(&VertexLayout, 2);
+    u32 VertexPositionIndex = vtk::push_vertex_attribute(&VertexLayout, 3);
+    u32 VertexUVIndex = vtk::push_vertex_attribute(&VertexLayout, 2);
 
     ////////////////////////////////////////////////////////////
     /// Memory
@@ -249,32 +249,32 @@ main()
     HostBufferInfo.Size = 10 * MEGABYTE;
     HostBufferInfo.UsageFlags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     HostBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    vtk::buffer HostBuffer = vtk::CreateBuffer(&Device, &HostBufferInfo);
+    vtk::buffer HostBuffer = vtk::create_buffer(&Device, &HostBufferInfo);
 
     vtk::buffer_info DeviceBufferInfo = {};
     DeviceBufferInfo.Size = 10 * MEGABYTE;
     DeviceBufferInfo.UsageFlags = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     DeviceBufferInfo.MemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    vtk::buffer DeviceBuffer = vtk::CreateBuffer(&Device, &DeviceBufferInfo);
+    vtk::buffer DeviceBuffer = vtk::create_buffer(&Device, &DeviceBufferInfo);
 
     // Regions
-    vtk::region StagingRegion = vtk::AllocateRegion(&HostBuffer, 2 * MEGABYTE);
+    vtk::region StagingRegion = vtk::allocate_region(&HostBuffer, 2 * MEGABYTE);
 
     ////////////////////////////////////////////////////////////
     /// Descriptor Set Resources
     ////////////////////////////////////////////////////////////
 
     // Uniform Buffers
-    vtk::uniform_buffer EntityUniformBuffer = vtk::CreateUniformBuffer(&HostBuffer, 2, sizeof(entity_ubo), FrameState.Frames.Count);
+    vtk::uniform_buffer EntityUniformBuffer = vtk::create_uniform_buffer(&HostBuffer, 2, sizeof(entity_ubo), FrameState.Frames.Count);
 
     // Textures
     vtk::texture_info GrassTextureInfo = {};
     GrassTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture GrassTexture = vtk::CreateTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
+    vtk::texture GrassTexture = vtk::create_texture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/grass.jpg",
                                                  &GrassTextureInfo);
     vtk::texture_info DirtTextureInfo = {};
     DirtTextureInfo.Filter = VK_FILTER_NEAREST;
-    vtk::texture DirtTexture = vtk::CreateTexture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
+    vtk::texture DirtTexture = vtk::create_texture(&Device, GraphicsCommandPool, &StagingRegion, "test_assets/textures/dirt.jpg",
                                                   &DirtTextureInfo);
 
     ////////////////////////////////////////////////////////////
@@ -303,44 +303,44 @@ main()
     // Descriptor Set Info
     ctk::smap<vtk::descriptor_set_info, 4> DescriptorSetInfos = {};
 
-    vtk::descriptor_set_info *EntityDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "entity");
+    vtk::descriptor_set_info *EntityDescriptorSetInfo = ctk::push(&DescriptorSetInfos, "entity");
     EntityDescriptorSetInfo->InstanceCount = FrameState.Frames.Count;
-    ctk::Push(&EntityDescriptorSetInfo->DescriptorBindings, { 0, &EntityDescriptorInfo });
+    ctk::push(&EntityDescriptorSetInfo->DescriptorBindings, { 0, &EntityDescriptorInfo });
 
-    vtk::descriptor_set_info *GrassTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "grass_texture");
+    vtk::descriptor_set_info *GrassTextureDescriptorSetInfo = ctk::push(&DescriptorSetInfos, "grass_texture");
     GrassTextureDescriptorSetInfo->InstanceCount = 1;
-    ctk::Push(&GrassTextureDescriptorSetInfo->DescriptorBindings, { 0, &GrassTextureDescriptorInfo });
+    ctk::push(&GrassTextureDescriptorSetInfo->DescriptorBindings, { 0, &GrassTextureDescriptorInfo });
 
-    vtk::descriptor_set_info *DirtTextureDescriptorSetInfo = ctk::Push(&DescriptorSetInfos, "dirt_texture");
+    vtk::descriptor_set_info *DirtTextureDescriptorSetInfo = ctk::push(&DescriptorSetInfos, "dirt_texture");
     DirtTextureDescriptorSetInfo->InstanceCount = 1;
-    ctk::Push(&DirtTextureDescriptorSetInfo->DescriptorBindings, { 0, &DirtTextureDescriptorInfo });
+    ctk::push(&DirtTextureDescriptorSetInfo->DescriptorBindings, { 0, &DirtTextureDescriptorInfo });
 
     // Pool
-    VkDescriptorPool DescriptorPool = vtk::CreateDescriptorPool(Device.Logical, DescriptorSetInfos.Values, DescriptorSetInfos.Count);
+    VkDescriptorPool DescriptorPool = vtk::create_descriptor_pool(Device.Logical, DescriptorSetInfos.Values, DescriptorSetInfos.Count);
 
     // Mirror descriptor set infos map to store descriptor sets.
     ctk::smap<vtk::descriptor_set, 4> DescriptorSets = {};
     for(u32 DescriptorSetIndex = 0; DescriptorSetIndex < DescriptorSetInfos.Count; ++DescriptorSetIndex)
     {
-        ctk::Push(&DescriptorSets, DescriptorSetInfos.Keys[DescriptorSetIndex]);
+        ctk::push(&DescriptorSets, DescriptorSetInfos.Keys[DescriptorSetIndex]);
     }
-    vtk::CreateDescriptorSets(Device.Logical, DescriptorPool, DescriptorSetInfos.Values, DescriptorSetInfos.Count, DescriptorSets.Values);
+    vtk::create_descriptor_sets(Device.Logical, DescriptorPool, DescriptorSetInfos.Values, DescriptorSetInfos.Count, DescriptorSets.Values);
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipelines
     ////////////////////////////////////////////////////////////
     vtk::graphics_pipeline_info GraphicsPipelineInfo = {};
-    ctk::Push(&GraphicsPipelineInfo.ShaderModules, &VertexShader);
-    ctk::Push(&GraphicsPipelineInfo.ShaderModules, &FragmentShader);
-    ctk::Push(&GraphicsPipelineInfo.VertexInputs, { 0, 0, VertexPositionIndex });
-    ctk::Push(&GraphicsPipelineInfo.VertexInputs, { 1, 0, VertexUVIndex });
-    ctk::Push(&GraphicsPipelineInfo.DescriptorSetLayouts, At(&DescriptorSets, "entity")->Layout);
-    ctk::Push(&GraphicsPipelineInfo.DescriptorSetLayouts, At(&DescriptorSets, "grass_texture")->Layout);
+    ctk::push(&GraphicsPipelineInfo.ShaderModules, &VertexShader);
+    ctk::push(&GraphicsPipelineInfo.ShaderModules, &FragmentShader);
+    ctk::push(&GraphicsPipelineInfo.VertexInputs, { 0, 0, VertexPositionIndex });
+    ctk::push(&GraphicsPipelineInfo.VertexInputs, { 1, 0, VertexUVIndex });
+    ctk::push(&GraphicsPipelineInfo.DescriptorSetLayouts, ctk::at(&DescriptorSets, "entity")->Layout);
+    ctk::push(&GraphicsPipelineInfo.DescriptorSetLayouts, ctk::at(&DescriptorSets, "grass_texture")->Layout);
     GraphicsPipelineInfo.VertexLayout = &VertexLayout;
     GraphicsPipelineInfo.ViewportExtent = Swapchain.Extent;
     GraphicsPipelineInfo.PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     GraphicsPipelineInfo.DepthTesting = VK_TRUE;
-    vtk::graphics_pipeline GraphicsPipeline = vtk::CreateGraphicsPipeline(Device.Logical, RenderPass.Handle, &GraphicsPipelineInfo);
+    vtk::graphics_pipeline GraphicsPipeline = vtk::create_graphics_pipeline(Device.Logical, &RenderPass, &GraphicsPipelineInfo);
 
     ////////////////////////////////////////////////////////////
     /// Data
@@ -356,30 +356,30 @@ main()
         0, 1, 2, 0, 2, 3,
         4, 5, 6, 4, 6, 7,
     };
-    ctk::Push(&QuadMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
-    ctk::Push(&QuadMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
-    ctk::Push(&QuadMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
-    ctk::Push(&QuadMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
-    ctk::Push(&QuadMesh->Indexes, QuadIndexes, CTK_ARRAY_COUNT(QuadIndexes));
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 1.0f }, { 0.0f, 1.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
-    ctk::Push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 1.0f }, { 0.0f, 0.0f } });
-    ctk::Push(&CubeMesh->Indexes, CubeIndexes, CTK_ARRAY_COUNT(CubeIndexes));
+    ctk::push(&QuadMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
+    ctk::push(&QuadMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::push(&QuadMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::push(&QuadMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
+    ctk::push(&QuadMesh->Indexes, QuadIndexes, CTK_ARRAY_COUNT(QuadIndexes));
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 0.0f, 1.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 1.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 1.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 1.0f }, { 0.0f, 1.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f,  0.0f, 0.0f }, { 1.0f, 1.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 0.0f }, { 1.0f, 0.0f } });
+    ctk::push(&CubeMesh->Vertexes, { { 0.0f, -1.0f, 1.0f }, { 0.0f, 0.0f } });
+    ctk::push(&CubeMesh->Indexes, CubeIndexes, CTK_ARRAY_COUNT(CubeIndexes));
     for(u32 MeshIndex = 0; MeshIndex < CTK_ARRAY_COUNT(Meshes); ++MeshIndex)
     {
         mesh *Mesh = Meshes + MeshIndex;
-        u32 VertexByteCount = ctk::ByteCount(&Mesh->Vertexes);
-        u32 IndexByteCount = ctk::ByteCount(&Mesh->Indexes);
-        Mesh->VertexRegion = vtk::AllocateRegion(&DeviceBuffer, VertexByteCount);
-        Mesh->IndexRegion = vtk::AllocateRegion(&DeviceBuffer, IndexByteCount);
-        vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->VertexRegion,
+        u32 VertexByteCount = ctk::byte_count(&Mesh->Vertexes);
+        u32 IndexByteCount = ctk::byte_count(&Mesh->Indexes);
+        Mesh->VertexRegion = vtk::allocate_region(&DeviceBuffer, VertexByteCount);
+        Mesh->IndexRegion = vtk::allocate_region(&DeviceBuffer, IndexByteCount);
+        vtk::write_to_device_region(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->VertexRegion,
                                  Mesh->Vertexes.Data, VertexByteCount, 0);
-        vtk::WriteToDeviceRegion(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->IndexRegion,
+        vtk::write_to_device_region(&Device, GraphicsCommandPool, &StagingRegion, &Mesh->IndexRegion,
                                  Mesh->Indexes.Data, IndexByteCount, 0);
     }
 
@@ -387,15 +387,15 @@ main()
     /// Scene
     ////////////////////////////////////////////////////////////
     ctk::sarray<render_entity, 4> RenderEntities = {};
-    render_entity *QuadEntity = ctk::Push(&RenderEntities);
-    ctk::Push(&QuadEntity->DescriptorSets, At(&DescriptorSets, "entity"));
-    ctk::Push(&QuadEntity->DescriptorSets, At(&DescriptorSets, "grass_texture"));
+    render_entity *QuadEntity = ctk::push(&RenderEntities);
+    ctk::push(&QuadEntity->DescriptorSets, ctk::at(&DescriptorSets, "entity"));
+    ctk::push(&QuadEntity->DescriptorSets, ctk::at(&DescriptorSets, "grass_texture"));
     QuadEntity->GraphicsPipeline = &GraphicsPipeline;
     QuadEntity->Mesh = QuadMesh;
 
-    render_entity *CubeEntity = ctk::Push(&RenderEntities);
-    ctk::Push(&CubeEntity->DescriptorSets, At(&DescriptorSets, "entity"));
-    ctk::Push(&CubeEntity->DescriptorSets, At(&DescriptorSets, "dirt_texture"));
+    render_entity *CubeEntity = ctk::push(&RenderEntities);
+    ctk::push(&CubeEntity->DescriptorSets, ctk::at(&DescriptorSets, "entity"));
+    ctk::push(&CubeEntity->DescriptorSets, ctk::at(&DescriptorSets, "dirt_texture"));
     CubeEntity->GraphicsPipeline = &GraphicsPipeline;
     CubeEntity->Mesh = CubeMesh;
 
@@ -415,8 +415,8 @@ main()
     for(u32 FrameIndex = 0; FrameIndex < FrameState.Frames.Count; ++FrameIndex)
     {
         VkCommandBuffer CommandBuffer = RenderPass.CommandBuffers[FrameIndex];
-        vtk::ValidateVkResult(vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo),
-                              "vkBeginCommandBuffer", "failed to begin recording command buffer");
+        vtk::validate_vk_result(vkBeginCommandBuffer(CommandBuffer, &CommandBufferBeginInfo),
+                                "vkBeginCommandBuffer", "failed to begin recording command buffer");
         VkRenderPassBeginInfo RenderPassBeginInfo = {};
         RenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         RenderPassBeginInfo.renderPass = RenderPass.Handle;
@@ -438,7 +438,7 @@ main()
             vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderEntity->GraphicsPipeline->Handle);
 
             // Descriptor Sets
-            vtk::BindDescriptorSets(CommandBuffer, RenderEntity->GraphicsPipeline->Layout,
+            vtk::bind_descriptor_sets(CommandBuffer, RenderEntity->GraphicsPipeline->Layout,
                                     RenderEntity->DescriptorSets.Data, RenderEntity->DescriptorSets.Count,
                                     FrameIndex, EntityIndex);
 
@@ -452,7 +452,7 @@ main()
 
         // End
         vkCmdEndRenderPass(CommandBuffer);
-        vtk::ValidateVkResult(vkEndCommandBuffer(CommandBuffer), "vkEndCommandBuffer", "error during render pass command recording");
+        vtk::validate_vk_result(vkEndCommandBuffer(CommandBuffer), "vkEndCommandBuffer", "error during render pass command recording");
     }
 
     ////////////////////////////////////////////////////////////
@@ -500,7 +500,7 @@ main()
             static const f32 SENS = 0.4f;
             CameraRotation.x += AppState.MouseDelta.Y * SENS;
             CameraRotation.y -= AppState.MouseDelta.X * SENS;
-            CameraRotation.x = ctk::Clamp(CameraRotation.x, -80.0f, 80.0f);
+            CameraRotation.x = ctk::clamp(CameraRotation.x, -80.0f, 80.0f);
         }
 
         // Translation
@@ -572,7 +572,7 @@ main()
             EntityUBOs[EntityIndex].ModelMatrix = ModelMatrix;
             EntityUBOs[EntityIndex].MVPMatrix = ProjectionMatrix * ViewMatrix * ModelMatrix;
         }
-        vtk::WriteToHostRegion(Device.Logical, EntityUniformBuffer.Regions + FrameState.CurrentFrameIndex, EntityUBOs, sizeof(EntityUBOs), 0);
+        vtk::write_to_host_region(Device.Logical, EntityUniformBuffer.Regions + FrameState.CurrentFrameIndex, EntityUBOs, sizeof(EntityUBOs), 0);
 
         ////////////////////////////////////////////////////////////
         /// Rendering
@@ -587,7 +587,7 @@ main()
         {
             VkResult Result = vkAcquireNextImageKHR(Device.Logical, Swapchain.Handle, UINT64_MAX, CurrentFrame->ImageAquiredSemaphore,
                                                     VK_NULL_HANDLE, &SwapchainImageIndex);
-            vtk::ValidateVkResult(Result, "vkAcquireNextImageKHR", "failed to aquire next swapchain image");
+            vtk::validate_vk_result(Result, "vkAcquireNextImageKHR", "failed to aquire next swapchain image");
         }
 
         // Wait on swapchain images previously associated frame fence before rendering.
@@ -620,7 +620,7 @@ main()
             // Submit render pass commands to graphics queue for rendering.
             // Signal current frame's in flight flence when commands have finished executing.
             VkResult Result = vkQueueSubmit(Device.GraphicsQueue, CTK_ARRAY_COUNT(SubmitInfos), SubmitInfos, CurrentFrame->InFlightFence);
-            vtk::ValidateVkResult(Result, "vkQueueSubmit", "failed to submit command buffer to graphics queue");
+            vtk::validate_vk_result(Result, "vkQueueSubmit", "failed to submit command buffer to graphics queue");
         }
 
         ////////////////////////////////////////////////////////////
@@ -642,7 +642,7 @@ main()
         {
             // Submit Swapchains to present queue for presentation once rendering is complete.
             VkResult Result = vkQueuePresentKHR(Device.PresentQueue, &PresentInfo);
-            vtk::ValidateVkResult(Result, "vkQueuePresentKHR", "failed to queue image for presentation");
+            vtk::validate_vk_result(Result, "vkQueuePresentKHR", "failed to queue image for presentation");
         }
 
         // Cycle frame.
