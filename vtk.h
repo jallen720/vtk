@@ -146,7 +146,6 @@ struct render_pass_info
 struct render_pass
 {
     VkRenderPass Handle;
-    u32 ColorAttachmentCount;
     ctk::sarray<VkClearValue, 4> ClearValues;
     ctk::sarray<VkFramebuffer, 4> Framebuffers;
     ctk::sarray<VkCommandBuffer, 4> CommandBuffers;
@@ -187,12 +186,16 @@ struct descriptor_pool_info
 struct graphics_pipeline_info
 {
     ctk::sarray<shader_module *, 4> ShaderModules;
+    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
     ctk::sarray<vertex_input, 4> VertexInputs;
     vertex_layout *VertexLayout;
-    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
-    VkExtent2D ViewportExtent;
-    VkPrimitiveTopology PrimitiveTopology;
-    VkBool32 DepthTesting;
+    ctk::sarray<VkViewport, 4> Viewports;
+    ctk::sarray<VkRect2D, 4> Scissors;
+
+    VkPipelineInputAssemblyStateCreateInfo InputAssemblyState;
+    VkPipelineDepthStencilStateCreateInfo DepthStencilState;
+    VkPipelineRasterizationStateCreateInfo RasterizationState;
+    VkPipelineMultisampleStateCreateInfo MultisampleState;
 };
 
 struct graphics_pipeline
@@ -1187,7 +1190,6 @@ static render_pass
 create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pass_info *RenderPassInfo)
 {
     render_pass RenderPass = {};
-    RenderPass.ColorAttachmentCount = 0;
 
     // Attachments
     ctk::sarray<VkAttachmentDescription, 4> AttachmentDescriptions = {};
@@ -1218,12 +1220,6 @@ create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pas
         SubpassDescription->pDepthStencilAttachment = Subpass->DepthAttachmentReference ? &Subpass->DepthAttachmentReference.Value : NULL;
         SubpassDescription->preserveAttachmentCount = 0;
         SubpassDescription->pPreserveAttachments = NULL;
-
-        ctk::todo("HACK: taking largest subpass color attachment reference count as render pass color attachment count");
-        if(Subpass->ColorAttachmentReferences.Count > RenderPass.ColorAttachmentCount)
-        {
-            RenderPass.ColorAttachmentCount = Subpass->ColorAttachmentReferences.Count;
-        }
     }
 
     VkSubpassDependency SubpassDependencies[1] = {};
@@ -1300,6 +1296,56 @@ push_vertex_attribute(vertex_layout *VertexLayout, u32 ElementCount)
     return AttributeIndex;
 }
 
+static graphics_pipeline_info
+default_graphics_pipeline_info()
+{
+    graphics_pipeline_info GraphicsPipelineInfo = {};
+    GraphicsPipelineInfo.InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    GraphicsPipelineInfo.InputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    GraphicsPipelineInfo.InputAssemblyState.primitiveRestartEnable = VK_FALSE;
+
+    GraphicsPipelineInfo.DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    // Depth
+    GraphicsPipelineInfo.DepthStencilState.depthTestEnable = VK_FALSE;
+    GraphicsPipelineInfo.DepthStencilState.depthWriteEnable = VK_FALSE;
+    GraphicsPipelineInfo.DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+    GraphicsPipelineInfo.DepthStencilState.depthBoundsTestEnable = VK_FALSE;
+    GraphicsPipelineInfo.DepthStencilState.minDepthBounds = 0.0f;
+    GraphicsPipelineInfo.DepthStencilState.maxDepthBounds = 1.0f;
+    // Stencil
+    GraphicsPipelineInfo.DepthStencilState.stencilTestEnable = VK_FALSE;
+    GraphicsPipelineInfo.DepthStencilState.front.compareOp = VK_COMPARE_OP_NEVER;
+    GraphicsPipelineInfo.DepthStencilState.front.passOp = VK_STENCIL_OP_KEEP;
+    GraphicsPipelineInfo.DepthStencilState.front.failOp = VK_STENCIL_OP_KEEP;
+    GraphicsPipelineInfo.DepthStencilState.front.depthFailOp = VK_STENCIL_OP_KEEP;
+    GraphicsPipelineInfo.DepthStencilState.front.compareMask = 0xFF;
+    GraphicsPipelineInfo.DepthStencilState.front.writeMask = 0xFF;
+    GraphicsPipelineInfo.DepthStencilState.front.reference = 1;
+    GraphicsPipelineInfo.DepthStencilState.back = GraphicsPipelineInfo.DepthStencilState.front;
+
+    GraphicsPipelineInfo.RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    GraphicsPipelineInfo.RasterizationState.depthClampEnable = VK_FALSE; // Don't clamp fragments within depth range.
+    GraphicsPipelineInfo.RasterizationState.rasterizerDiscardEnable = VK_FALSE;
+    GraphicsPipelineInfo.RasterizationState.polygonMode = VK_POLYGON_MODE_FILL; // Only available mode on AMD gpus?
+    GraphicsPipelineInfo.RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+    GraphicsPipelineInfo.RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    GraphicsPipelineInfo.RasterizationState.depthBiasEnable = VK_FALSE;
+    GraphicsPipelineInfo.RasterizationState.depthBiasConstantFactor = 0.0f;
+    GraphicsPipelineInfo.RasterizationState.depthBiasClamp = 0.0f;
+    GraphicsPipelineInfo.RasterizationState.depthBiasSlopeFactor = 0.0f;
+    GraphicsPipelineInfo.RasterizationState.lineWidth = 1.0f;
+
+    GraphicsPipelineInfo.MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    GraphicsPipelineInfo.MultisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    GraphicsPipelineInfo.MultisampleState.sampleShadingEnable = VK_FALSE;
+    GraphicsPipelineInfo.MultisampleState.minSampleShading = 1.0f;
+    GraphicsPipelineInfo.MultisampleState.pSampleMask = NULL;
+    GraphicsPipelineInfo.MultisampleState.alphaToCoverageEnable = VK_FALSE;
+    GraphicsPipelineInfo.MultisampleState.alphaToOneEnable = VK_FALSE;
+
+    return GraphicsPipelineInfo;
+}
+
 static graphics_pipeline
 create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphics_pipeline_info *GraphicsPipelineInfo)
 {
@@ -1321,6 +1367,18 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
         ShaderStageCreateInfo->pName = "main";
         ShaderStageCreateInfo->pSpecializationInfo = NULL;
     }
+
+    ////////////////////////////////////////////////////////////
+    /// Pipeline Layout
+    ////////////////////////////////////////////////////////////
+    VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
+    LayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    LayoutCreateInfo.setLayoutCount = GraphicsPipelineInfo->DescriptorSetLayouts.Count;
+    LayoutCreateInfo.pSetLayouts = GraphicsPipelineInfo->DescriptorSetLayouts.Data;
+    LayoutCreateInfo.pushConstantRangeCount = 0;
+    LayoutCreateInfo.pPushConstantRanges = NULL;
+    validate_vk_result(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),
+                       "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
 
     ////////////////////////////////////////////////////////////
     /// Vertex Input State
@@ -1352,118 +1410,41 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
     VertexInputState.pVertexAttributeDescriptions = VertexAttributeDescriptions.Data;
 
     ////////////////////////////////////////////////////////////
-    /// Input Assembly State
-    ////////////////////////////////////////////////////////////
-    VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {};
-    InputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    InputAssemblyState.topology = GraphicsPipelineInfo->PrimitiveTopology;
-    InputAssemblyState.primitiveRestartEnable = VK_FALSE;
-
-    ////////////////////////////////////////////////////////////
     /// Viewport State
     ////////////////////////////////////////////////////////////
-    VkViewport Viewport = {};
-    Viewport.x = 0.0f;
-    Viewport.y = 0.0f;
-    Viewport.width = (f32)GraphicsPipelineInfo->ViewportExtent.width;
-    Viewport.height = (f32)GraphicsPipelineInfo->ViewportExtent.height;
-    Viewport.minDepth = 0.0f;
-    Viewport.maxDepth = 1.0f;
-
-    // Make scissor fill viewport.
-    VkRect2D Scissor = {};
-    Scissor.offset.x = 0;
-    Scissor.offset.y = 0;
-    Scissor.extent.width = Viewport.width;
-    Scissor.extent.height = Viewport.height;
-
     VkPipelineViewportStateCreateInfo ViewportState = {};
     ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    ViewportState.viewportCount = 1;
-    ViewportState.pViewports = &Viewport;
-    ViewportState.scissorCount = 1;
-    ViewportState.pScissors = &Scissor;
+    ViewportState.viewportCount = GraphicsPipelineInfo->Viewports.Count;
+    ViewportState.pViewports = GraphicsPipelineInfo->Viewports.Data;
+    ViewportState.scissorCount = GraphicsPipelineInfo->Scissors.Count;
+    ViewportState.pScissors = GraphicsPipelineInfo->Scissors.Data;
 
     ////////////////////////////////////////////////////////////
-    /// Depth Stencil State
+    /// Color Blend State
     ////////////////////////////////////////////////////////////
-    VkPipelineDepthStencilStateCreateInfo DepthStencilState = {};
-    DepthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    DepthStencilState.depthTestEnable = GraphicsPipelineInfo->DepthTesting;
-    DepthStencilState.depthWriteEnable = GraphicsPipelineInfo->DepthTesting;
-    DepthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
-    DepthStencilState.depthBoundsTestEnable = VK_FALSE;
-    DepthStencilState.stencilTestEnable = VK_FALSE;
-    DepthStencilState.front = {};
-    DepthStencilState.back = {};
-    DepthStencilState.minDepthBounds = 0.0f;
-    DepthStencilState.maxDepthBounds = 1.0f;
-
-    ////////////////////////////////////////////////////////////
-    /// Default State
-    ////////////////////////////////////////////////////////////
-    VkPipelineRasterizationStateCreateInfo RasterizationState = {};
-    RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    RasterizationState.depthClampEnable = VK_FALSE; // Don't clamp fragments within depth range.
-    RasterizationState.rasterizerDiscardEnable = VK_FALSE;
-    RasterizationState.polygonMode = VK_POLYGON_MODE_FILL; // Only available mode on AMD gpus?
-    RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-    RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    RasterizationState.depthBiasEnable = VK_FALSE;
-    RasterizationState.depthBiasConstantFactor = 0.0f;
-    RasterizationState.depthBiasClamp = 0.0f;
-    RasterizationState.depthBiasSlopeFactor = 0.0f;
-    RasterizationState.lineWidth = 1.0f;
-
-    VkPipelineMultisampleStateCreateInfo MultisampleState = {};
-    MultisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    MultisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    MultisampleState.sampleShadingEnable = VK_FALSE;
-    MultisampleState.minSampleShading = 1.0f;
-    MultisampleState.pSampleMask = NULL;
-    MultisampleState.alphaToCoverageEnable = VK_FALSE;
-    MultisampleState.alphaToOneEnable = VK_FALSE;
-
-    ctk::todo("HACK: duplicated color blend states for each color attachment in render pass");
-    ctk::sarray<VkPipelineColorBlendAttachmentState, 4> ColorBlendAttachmentStates = {};
-    CTK_REPEAT(RenderPass->ColorAttachmentCount)
-    {
-        VkPipelineColorBlendAttachmentState *ColorBlendAttachmentState = ctk::push(&ColorBlendAttachmentStates);
-        ColorBlendAttachmentState->blendEnable = VK_FALSE;
-        ColorBlendAttachmentState->srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        ColorBlendAttachmentState->dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-        ColorBlendAttachmentState->colorBlendOp = VK_BLEND_OP_ADD;
-        ColorBlendAttachmentState->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        ColorBlendAttachmentState->dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        ColorBlendAttachmentState->alphaBlendOp = VK_BLEND_OP_ADD;
-        ColorBlendAttachmentState->colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                    VK_COLOR_COMPONENT_G_BIT |
-                                                    VK_COLOR_COMPONENT_B_BIT |
-                                                    VK_COLOR_COMPONENT_A_BIT;
-    }
+    VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
+    ColorBlendAttachmentState.blendEnable = VK_TRUE;
+    ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                               VK_COLOR_COMPONENT_G_BIT |
+                                               VK_COLOR_COMPONENT_B_BIT |
+                                               VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineColorBlendStateCreateInfo ColorBlendState = {};
     ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     ColorBlendState.logicOpEnable = VK_FALSE;
     ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    ColorBlendState.attachmentCount = ColorBlendAttachmentStates.Count;
-    ColorBlendState.pAttachments = ColorBlendAttachmentStates.Data;
+    ColorBlendState.attachmentCount = 1;
+    ColorBlendState.pAttachments = &ColorBlendAttachmentState;
     ColorBlendState.blendConstants[0] = 0.0f;
     ColorBlendState.blendConstants[1] = 0.0f;
     ColorBlendState.blendConstants[2] = 0.0f;
     ColorBlendState.blendConstants[3] = 0.0f;
-
-    ////////////////////////////////////////////////////////////
-    /// Pipeline Layout
-    ////////////////////////////////////////////////////////////
-    VkPipelineLayoutCreateInfo LayoutCreateInfo = {};
-    LayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    LayoutCreateInfo.setLayoutCount = GraphicsPipelineInfo->DescriptorSetLayouts.Count;
-    LayoutCreateInfo.pSetLayouts = GraphicsPipelineInfo->DescriptorSetLayouts.Data;
-    LayoutCreateInfo.pushConstantRangeCount = 0;
-    LayoutCreateInfo.pPushConstantRanges = NULL;
-    validate_vk_result(vkCreatePipelineLayout(LogicalDevice, &LayoutCreateInfo, NULL, &GraphicsPipeline.Layout),
-                       "vkCreatePipelineLayout", "failed to create graphics pipeline layout");
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
@@ -1473,12 +1454,12 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
     GraphicsPipelineCreateInfo.stageCount = ShaderStages.Count;
     GraphicsPipelineCreateInfo.pStages = ShaderStages.Data;
     GraphicsPipelineCreateInfo.pVertexInputState = &VertexInputState;
-    GraphicsPipelineCreateInfo.pInputAssemblyState = &InputAssemblyState;
+    GraphicsPipelineCreateInfo.pInputAssemblyState = &GraphicsPipelineInfo->InputAssemblyState;
     GraphicsPipelineCreateInfo.pTessellationState = NULL;
     GraphicsPipelineCreateInfo.pViewportState = &ViewportState;
-    GraphicsPipelineCreateInfo.pRasterizationState = &RasterizationState;
-    GraphicsPipelineCreateInfo.pMultisampleState = &MultisampleState;
-    GraphicsPipelineCreateInfo.pDepthStencilState = &DepthStencilState;
+    GraphicsPipelineCreateInfo.pRasterizationState = &GraphicsPipelineInfo->RasterizationState;
+    GraphicsPipelineCreateInfo.pMultisampleState = &GraphicsPipelineInfo->MultisampleState;
+    GraphicsPipelineCreateInfo.pDepthStencilState = &GraphicsPipelineInfo->DepthStencilState;
     GraphicsPipelineCreateInfo.pColorBlendState = &ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState = NULL;
     GraphicsPipelineCreateInfo.layout = GraphicsPipeline.Layout;
@@ -1572,9 +1553,11 @@ find_depth_image_format(VkPhysicalDevice PhysicalDevice)
 {
     static VkFormat const DEPTH_IMAGE_FORMATS[] =
     {
-        VK_FORMAT_D24_UNORM_S8_UINT,
-        VK_FORMAT_D32_SFLOAT,
         VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D24_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM
     };
     static VkFormatFeatureFlags const DEPTH_IMG_FORMAT_FEATURES = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
     for(u32 DepthImageFormatIndex = 0; DepthImageFormatIndex < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); DepthImageFormatIndex++)
@@ -1616,9 +1599,9 @@ struct image_memory_pipeline_stage_mask
 };
 
 static void
-insert_image_memory_barrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
-                            image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
-                            image_memory_pipeline_stage_mask PipelineStageMask)
+image_memory_barrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
+                     image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
+                     image_memory_pipeline_stage_mask PipelineStageMask)
 {
     VkImageMemoryBarrier ImageMemoryBarrier = {};
     ImageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
