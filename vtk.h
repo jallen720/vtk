@@ -19,6 +19,7 @@
     { \
         CTK_FATAL("failed to load instance extension function \"%s\"", #FUNCTION_NAME) \
     }
+#define VTK_COLOR_COMPONENT_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
 namespace vtk {
 
@@ -191,11 +192,13 @@ struct graphics_pipeline_info
     vertex_layout *VertexLayout;
     ctk::sarray<VkViewport, 4> Viewports;
     ctk::sarray<VkRect2D, 4> Scissors;
+    ctk::sarray<VkPipelineColorBlendAttachmentState, 4> ColorBlendAttachmentStates;
 
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyState;
     VkPipelineDepthStencilStateCreateInfo DepthStencilState;
     VkPipelineRasterizationStateCreateInfo RasterizationState;
     VkPipelineMultisampleStateCreateInfo MultisampleState;
+    VkPipelineColorBlendStateCreateInfo ColorBlendState;
 };
 
 struct graphics_pipeline
@@ -281,6 +284,31 @@ struct descriptor_set
     ctk::sarray<VkDescriptorSet, 4> Instances;
     ctk::sarray<u32, 4> DynamicOffsets;
     VkDescriptorSetLayout Layout;
+};
+
+struct image_memory_info
+{
+    VkAccessFlags AccessMask;
+    VkImageLayout ImageLayout;
+    VkPipelineStageFlags PipelineStageMask;
+};
+
+struct image_memory_access_mask
+{
+    VkAccessFlags Source;
+    VkAccessFlags Destination;
+};
+
+struct image_memory_image_layout
+{
+    VkImageLayout Source;
+    VkImageLayout Destination;
+};
+
+struct image_memory_pipeline_stage_mask
+{
+    VkPipelineStageFlags Source;
+    VkPipelineStageFlags Destination;
 };
 
 ////////////////////////////////////////////////////////////
@@ -1121,7 +1149,7 @@ create_texture(device *Device, VkCommandPool CommandPool, region *StagingRegion,
     write_to_host_region(Device->Logical, StagingRegion, ImageData, Texture.Image.Width * Texture.Image.Height * IMAGE_CHANNELS, 0);
     transition_image_layout(Device, CommandPool, &Texture.Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     VkBufferImageCopy BufferImageCopyRegions[1] = {};
-    BufferImageCopyRegions[0].bufferOffset = 0;//StagingRegion->Offset;
+    BufferImageCopyRegions[0].bufferOffset = 0;
     BufferImageCopyRegions[0].bufferRowLength = 0;
     BufferImageCopyRegions[0].bufferImageHeight = 0;
     BufferImageCopyRegions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1343,7 +1371,36 @@ default_graphics_pipeline_info()
     GraphicsPipelineInfo.MultisampleState.alphaToCoverageEnable = VK_FALSE;
     GraphicsPipelineInfo.MultisampleState.alphaToOneEnable = VK_FALSE;
 
+    GraphicsPipelineInfo.ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    GraphicsPipelineInfo.ColorBlendState.logicOpEnable = VK_FALSE;
+    GraphicsPipelineInfo.ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
+    GraphicsPipelineInfo.ColorBlendState.attachmentCount = 0;
+    GraphicsPipelineInfo.ColorBlendState.pAttachments = NULL;
+    GraphicsPipelineInfo.ColorBlendState.blendConstants[0] = 1.0f;
+    GraphicsPipelineInfo.ColorBlendState.blendConstants[1] = 1.0f;
+    GraphicsPipelineInfo.ColorBlendState.blendConstants[2] = 1.0f;
+    GraphicsPipelineInfo.ColorBlendState.blendConstants[3] = 1.0f;
+
     return GraphicsPipelineInfo;
+}
+
+
+static VkPipelineColorBlendAttachmentState
+default_color_blend_attachment_state()
+{
+    VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
+    ColorBlendAttachmentState.blendEnable = VK_FALSE;
+    ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    ColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+    ColorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                               VK_COLOR_COMPONENT_G_BIT |
+                                               VK_COLOR_COMPONENT_B_BIT |
+                                               VK_COLOR_COMPONENT_A_BIT;
+    return ColorBlendAttachmentState;
 }
 
 static graphics_pipeline
@@ -1422,29 +1479,8 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
     ////////////////////////////////////////////////////////////
     /// Color Blend State
     ////////////////////////////////////////////////////////////
-    VkPipelineColorBlendAttachmentState ColorBlendAttachmentState = {};
-    ColorBlendAttachmentState.blendEnable = VK_TRUE;
-    ColorBlendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    ColorBlendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
-    ColorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    ColorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    ColorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-    ColorBlendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                               VK_COLOR_COMPONENT_G_BIT |
-                                               VK_COLOR_COMPONENT_B_BIT |
-                                               VK_COLOR_COMPONENT_A_BIT;
-
-    VkPipelineColorBlendStateCreateInfo ColorBlendState = {};
-    ColorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    ColorBlendState.logicOpEnable = VK_FALSE;
-    ColorBlendState.logicOp = VK_LOGIC_OP_COPY;
-    ColorBlendState.attachmentCount = 1;
-    ColorBlendState.pAttachments = &ColorBlendAttachmentState;
-    ColorBlendState.blendConstants[0] = 0.0f;
-    ColorBlendState.blendConstants[1] = 0.0f;
-    ColorBlendState.blendConstants[2] = 0.0f;
-    ColorBlendState.blendConstants[3] = 0.0f;
+    GraphicsPipelineInfo->ColorBlendState.attachmentCount = GraphicsPipelineInfo->ColorBlendAttachmentStates.Count;
+    GraphicsPipelineInfo->ColorBlendState.pAttachments = GraphicsPipelineInfo->ColorBlendAttachmentStates.Data;
 
     ////////////////////////////////////////////////////////////
     /// Graphics Pipeline
@@ -1460,7 +1496,7 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
     GraphicsPipelineCreateInfo.pRasterizationState = &GraphicsPipelineInfo->RasterizationState;
     GraphicsPipelineCreateInfo.pMultisampleState = &GraphicsPipelineInfo->MultisampleState;
     GraphicsPipelineCreateInfo.pDepthStencilState = &GraphicsPipelineInfo->DepthStencilState;
-    GraphicsPipelineCreateInfo.pColorBlendState = &ColorBlendState;
+    GraphicsPipelineCreateInfo.pColorBlendState = &GraphicsPipelineInfo->ColorBlendState;
     GraphicsPipelineCreateInfo.pDynamicState = NULL;
     GraphicsPipelineCreateInfo.layout = GraphicsPipeline.Layout;
     GraphicsPipelineCreateInfo.renderPass = RenderPass->Handle;
@@ -1531,7 +1567,7 @@ write_to_host_region(VkDevice LogicalDevice, region *Region, void *Data, VkDevic
 
 static void
 write_to_device_region(device *Device, VkCommandPool CommandPool, region *StagingRegion, region *Region,
-                    void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
+                       void *Data, VkDeviceSize Size, VkDeviceSize OffsetIntoRegion)
 {
     if(OffsetIntoRegion + Size > Region->Size)
     {
@@ -1572,31 +1608,6 @@ find_depth_image_format(VkPhysicalDevice PhysicalDevice)
     }
     CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
 }
-
-struct image_memory_info
-{
-    VkAccessFlags AccessMask;
-    VkImageLayout ImageLayout;
-    VkPipelineStageFlags PipelineStageMask;
-};
-
-struct image_memory_access_mask
-{
-    VkAccessFlags Source;
-    VkAccessFlags Destination;
-};
-
-struct image_memory_image_layout
-{
-    VkImageLayout Source;
-    VkImageLayout Destination;
-};
-
-struct image_memory_pipeline_stage_mask
-{
-    VkPipelineStageFlags Source;
-    VkPipelineStageFlags Destination;
-};
 
 static void
 image_memory_barrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
