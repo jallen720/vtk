@@ -126,6 +126,7 @@ struct attachment
 
 struct subpass
 {
+    ctk::sarray<VkAttachmentReference, 4> InputAttachmentReferences;
     ctk::sarray<VkAttachmentReference, 4> ColorAttachmentReferences;
     ctk::optional<VkAttachmentReference> DepthAttachmentReference;
 };
@@ -141,6 +142,7 @@ struct render_pass_info
 {
     ctk::sarray<attachment, 4> Attachments;
     ctk::sarray<subpass, 4> Subpasses;
+    ctk::sarray<VkSubpassDependency, 4> SubpassDependencies;
     ctk::sarray<framebuffer_info, 4> FramebufferInfos;
 };
 
@@ -199,6 +201,7 @@ struct graphics_pipeline_info
     VkPipelineRasterizationStateCreateInfo RasterizationState;
     VkPipelineMultisampleStateCreateInfo MultisampleState;
     VkPipelineColorBlendStateCreateInfo ColorBlendState;
+    u32 Subpass;
 };
 
 struct graphics_pipeline
@@ -1240,8 +1243,8 @@ create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pas
         subpass *Subpass = ctk::at(&RenderPassInfo->Subpasses, SubpassIndex);
         VkSubpassDescription *SubpassDescription = ctk::push(&SubpassDescriptions);
         SubpassDescription->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        SubpassDescription->inputAttachmentCount = 0;
-        SubpassDescription->pInputAttachments = NULL;
+        SubpassDescription->inputAttachmentCount = Subpass->InputAttachmentReferences.Count;
+        SubpassDescription->pInputAttachments = Subpass->InputAttachmentReferences.Data;
         SubpassDescription->colorAttachmentCount = Subpass->ColorAttachmentReferences.Count;
         SubpassDescription->pColorAttachments = Subpass->ColorAttachmentReferences.Data;
         SubpassDescription->pResolveAttachments = NULL;
@@ -1250,14 +1253,6 @@ create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pas
         SubpassDescription->pPreserveAttachments = NULL;
     }
 
-    VkSubpassDependency SubpassDependencies[1] = {};
-    SubpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    SubpassDependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    SubpassDependencies[0].srcAccessMask = 0;
-    SubpassDependencies[0].dstSubpass = 0;
-    SubpassDependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    SubpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
     // Render Pass
     VkRenderPassCreateInfo RenderPassCreateInfo = {};
     RenderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1265,8 +1260,8 @@ create_render_pass(VkDevice LogicalDevice, VkCommandPool CommandPool, render_pas
     RenderPassCreateInfo.pAttachments = AttachmentDescriptions.Data;
     RenderPassCreateInfo.subpassCount = SubpassDescriptions.Count;
     RenderPassCreateInfo.pSubpasses = SubpassDescriptions.Data;
-    RenderPassCreateInfo.dependencyCount = CTK_ARRAY_COUNT(SubpassDependencies);
-    RenderPassCreateInfo.pDependencies = SubpassDependencies;
+    RenderPassCreateInfo.dependencyCount = RenderPassInfo->SubpassDependencies.Count;
+    RenderPassCreateInfo.pDependencies = RenderPassInfo->SubpassDependencies.Data;
     validate_vk_result(vkCreateRenderPass(LogicalDevice, &RenderPassCreateInfo, NULL, &RenderPass.Handle),
                        "vkCreateRenderPass", "failed to create render pass");
 
@@ -1500,7 +1495,7 @@ create_graphics_pipeline(VkDevice LogicalDevice, render_pass *RenderPass, graphi
     GraphicsPipelineCreateInfo.pDynamicState = NULL;
     GraphicsPipelineCreateInfo.layout = GraphicsPipeline.Layout;
     GraphicsPipelineCreateInfo.renderPass = RenderPass->Handle;
-    GraphicsPipelineCreateInfo.subpass = 0;
+    GraphicsPipelineCreateInfo.subpass = GraphicsPipelineInfo->Subpass;
     GraphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     GraphicsPipelineCreateInfo.basePipelineIndex = -1;
     validate_vk_result(vkCreateGraphicsPipelines(LogicalDevice, VK_NULL_HANDLE, 1, &GraphicsPipelineCreateInfo, NULL,
@@ -1913,6 +1908,10 @@ create_descriptor_sets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
                     DescriptorImageInfo->imageView = Texture->Image.View;
                     DescriptorImageInfo->imageLayout = Texture->Image.Layout;
                     WriteDescriptorSet->pImageInfo = DescriptorImageInfo;
+                }
+                else
+                {
+                    CTK_FATAL("unhandled descriptor type when updating descriptor sets")
                 }
             }
         }
