@@ -995,13 +995,14 @@ allocate_device_memory(device *Device, VkMemoryRequirements *MemoryRequirements,
     u32 SelectedMemoryTypeIndex = VTK_UNSET_INDEX;
     for(u32 MemoryTypeIndex = 0; MemoryTypeIndex < Device->MemoryProperties.memoryTypeCount; ++MemoryTypeIndex)
     {
-        // Ensure index refers to memory type form memory requirements.
+        // Ensure index refers to memory type from memory requirements.
         if(!(MemoryRequirements->memoryTypeBits & (1 << MemoryTypeIndex)))
         {
             continue;
         }
+
         // Check if memory at index has correct properties.
-        else if((Device->MemoryProperties.memoryTypes[MemoryTypeIndex].propertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
+        if((Device->MemoryProperties.memoryTypes[MemoryTypeIndex].propertyFlags & MemoryPropertyFlags) == MemoryPropertyFlags)
         {
             SelectedMemoryTypeIndex = MemoryTypeIndex;
             break;
