@@ -1846,7 +1846,7 @@ create_descriptor_sets(VkDevice LogicalDevice, VkDescriptorPool DescriptorPool,
 }
 
 static void
-bind_descriptor_sets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipelineLayout,
+bind_descriptor_sets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPipelineLayout, u32 FirstDescriptorSetIndex,
                      descriptor_set **DescriptorSets, u32 DescriptorSetCount, u32 InstanceIndex = 0, u32 DynamicIndex = 0)
 {
     ctk::sarray<VkDescriptorSet, 4> DescriptorSetsToBind = {};
@@ -1862,7 +1862,7 @@ bind_descriptor_sets(VkCommandBuffer CommandBuffer, VkPipelineLayout GraphicsPip
         }
     }
     vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipelineLayout,
-                            0, // First Set Number
+                            FirstDescriptorSetIndex, // First Set Number
                             DescriptorSetsToBind.Count,
                             DescriptorSetsToBind.Data, // Sets to be bound to [first .. first + count]
                             DynamicOffsets.Count,
