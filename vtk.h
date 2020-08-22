@@ -55,6 +55,7 @@ struct queue_family_indexes
 struct device
 {
     VkPhysicalDevice Physical;
+    VkPhysicalDeviceProperties Properties;
     VkPhysicalDeviceMemoryProperties MemoryProperties;
     queue_family_indexes QueueFamilyIndexes;
     VkSurfaceCapabilitiesKHR SurfaceCapabilities;
@@ -744,6 +745,7 @@ create_device(VkInstance Instance, VkSurfaceKHR PlatformSurface, device_info *De
 
             // Initialize physical device with selected device info.
             Device.Physical = PhysicalDevice;
+            Device.Properties = SelectedDeviceQueryResults.Properties;
             Device.MemoryProperties = SelectedDeviceQueryResults.MemoryProperties;
             Device.QueueFamilyIndexes = SelectedDeviceQueryResults.QueueFamilyIndexes;
             Device.SurfaceCapabilities = SelectedDeviceQueryResults.SurfaceCapabilities;
@@ -993,16 +995,17 @@ destroy_buffer(VkDevice LogicalDevice, buffer *Buffer)
 }
 
 static region
-allocate_region(buffer *Buffer, u32 Size)
+allocate_region(buffer *Buffer, u32 Size, VkDeviceSize Alignment = 8)
 {
-    if(Buffer->End + Size > Buffer->Size)
-    {
-        CTK_FATAL("buffer (size=%u end=%u) cannot allocate region of size %u (only %u bytes left)",
-                  Buffer->Size, Buffer->End, Size, Buffer->Size - Buffer->End);
-    }
+    VkDeviceSize AlignmentOffset = Buffer->End % Alignment;
     region Region = {};
     Region.Buffer = Buffer;
-    Region.Offset = Buffer->End;
+    Region.Offset = AlignmentOffset ? Buffer->End - AlignmentOffset + Alignment : Buffer->End;
+    if(Region.Offset + Size > Buffer->Size)
+    {
+        CTK_FATAL("buffer (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)",
+                  Buffer->Size, Buffer->End, Size, Alignment, Buffer->Size - Buffer->End);
+    }
     Region.Size = Size;
     Buffer->End += Size;
     return Region;
@@ -1650,14 +1653,15 @@ transition_image_layout(device *Device, VkCommandPool CommandPool, image *Image,
 }
 
 static uniform_buffer
-create_uniform_buffer(buffer *Buffer, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
+create_uniform_buffer(buffer *Buffer, device *Device, VkDeviceSize ElementCount, VkDeviceSize ElementSize, u32 InstanceCount)
 {
     CTK_ASSERT(InstanceCount > 0)
     uniform_buffer UniformBuffer = {};
     UniformBuffer.ElementSize = ElementSize;
     CTK_ITERATE(InstanceCount)
     {
-        ctk::push(&UniformBuffer.Regions, allocate_region(Buffer, ElementCount * ElementSize));
+        ctk::push(&UniformBuffer.Regions, allocate_region(Buffer, ElementCount * ElementSize,
+                                                          Device->Properties.limits.minUniformBufferOffsetAlignment));
     }
     return UniformBuffer;
 }
