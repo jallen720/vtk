@@ -257,6 +257,39 @@ vk_format_name(VkFormat Format)
     return Pair->Value;
 }
 
+static cstr
+vk_color_space_name(VkColorSpaceKHR ColorSpace)
+{
+    static ctk::pair<VkColorSpaceKHR, cstr> COLOR_SPACES[] =
+    {
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_SRGB_NONLINEAR_KHR),
+
+        // Provided by VK_EXT_swapchain_colorspace
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_DCI_P3_NONLINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_BT709_LINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_BT709_NONLINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_BT2020_LINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_HDR10_ST2084_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_DOLBYVISION_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_HDR10_HLG_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_ADOBERGB_LINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_ADOBERGB_NONLINEAR_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_PASS_THROUGH_EXT),
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT),
+
+        // Provided by VK_AMD_display_native_hdr
+        CTK_VALUE_NAME_PAIR(VK_COLOR_SPACE_DISPLAY_NATIVE_AMD),
+    };
+    ctk::pair<VkColorSpaceKHR, cstr> *Pair = ctk::find_pair(COLOR_SPACES, CTK_ARRAY_COUNT(COLOR_SPACES), ColorSpace);
+    if(Pair == NULL) {
+        CTK_FATAL("unable to find name for VkColorSpaceKHR %u", ColorSpace);
+    }
+    return Pair->Value;
+}
+
 static void
 output_vk_result(VkResult Result, cstr FunctionName)
 {

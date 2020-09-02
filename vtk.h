@@ -814,7 +814,7 @@ create_swapchain(device *Device, VkSurfaceKHR PlatformSurface)
     {
         VkSurfaceFormatKHR SurfaceFormat = Device->SurfaceFormats[SurfaceFormatIndex];
 
-        // Prefer 4-component 8-bit BGRA unsigned normalized format and sRGB color space.
+        // Prefer 4-component 8-bit BGRA unnormalized format and sRGB color space.
         if(SurfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && SurfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
             SelectedFormat = SurfaceFormat;
