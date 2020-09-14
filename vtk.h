@@ -190,10 +190,10 @@ struct descriptor_pool_info
 
 struct graphics_pipeline_info
 {
-    ctk::sarray<shader_module *, 4> ShaderModules;
-    ctk::sarray<VkDescriptorSetLayout, 4> DescriptorSetLayouts;
-    ctk::sarray<VkPushConstantRange, 4> PushConstantRanges;
-    ctk::sarray<vertex_input, 4> VertexInputs;
+    ctk::sarray<shader_module *, 8> ShaderModules;
+    ctk::sarray<VkDescriptorSetLayout, 8> DescriptorSetLayouts;
+    ctk::sarray<VkPushConstantRange, 8> PushConstantRanges;
+    ctk::sarray<vertex_input, 8> VertexInputs;
     vertex_layout *VertexLayout;
     ctk::sarray<VkViewport, 4> Viewports;
     ctk::sarray<VkRect2D, 4> Scissors;
@@ -1058,6 +1058,34 @@ create_image(device *Device, image_info *ImageInfo)
     return Image;
 }
 
+static VkSampler
+create_sampler(VkDevice LogicalDevice, VkFilter Filter) {
+    VkSampler Sampler = VK_NULL_HANDLE;
+
+    // Create texture sampler.
+    VkSamplerCreateInfo SamplerCreateInfo = {};
+    SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    SamplerCreateInfo.magFilter = Filter;
+    SamplerCreateInfo.minFilter = Filter;
+    SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    SamplerCreateInfo.anisotropyEnable = VK_TRUE;
+    SamplerCreateInfo.maxAnisotropy = 16;
+    SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    SamplerCreateInfo.compareEnable = VK_FALSE;
+    SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    SamplerCreateInfo.mipLodBias = 0.0f;
+    SamplerCreateInfo.minLod = 0.0f;
+    SamplerCreateInfo.maxLod = 0.0f;
+    validate_vk_result(vkCreateSampler(LogicalDevice, &SamplerCreateInfo, NULL, &Sampler),
+                       "vkCreateSampler", "failed to create texture sampler");
+
+    return Sampler;
+}
+
 static texture
 create_texture(device *Device, VkCommandPool CommandPool, region *StagingRegion, cstr Path, texture_info *TextureInfo)
 {
@@ -1111,25 +1139,7 @@ create_texture(device *Device, VkCommandPool CommandPool, region *StagingRegion,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Create texture sampler.
-    VkSamplerCreateInfo SamplerCreateInfo = {};
-    SamplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    SamplerCreateInfo.magFilter = TextureInfo->Filter;
-    SamplerCreateInfo.minFilter = TextureInfo->Filter;
-    SamplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    SamplerCreateInfo.anisotropyEnable = VK_TRUE;
-    SamplerCreateInfo.maxAnisotropy = 16;
-    SamplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    SamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
-    SamplerCreateInfo.compareEnable = VK_FALSE;
-    SamplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    SamplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    SamplerCreateInfo.mipLodBias = 0.0f;
-    SamplerCreateInfo.minLod = 0.0f;
-    SamplerCreateInfo.maxLod = 0.0f;
-    validate_vk_result(vkCreateSampler(Device->Logical, &SamplerCreateInfo, NULL, &Texture.Sampler),
-                       "vkCreateSampler", "failed to create texture sampler");
+    Texture.Sampler = create_sampler(Device->Logical, TextureInfo->Filter);
 
     // Cleanup
     stbi_image_free(ImageData);
@@ -1535,7 +1545,8 @@ find_depth_image_format(VkPhysicalDevice PhysicalDevice)
 
 static void
 image_memory_barrier(VkCommandBuffer CommandBuffer, VkImage Image, VkImageAspectFlags AspectMask,
-                     image_memory_access_mask AccessMask, image_memory_image_layout ImageLayout,
+                     image_memory_access_mask AccessMask,
+                     image_memory_image_layout ImageLayout,
                      image_memory_pipeline_stage_mask PipelineStageMask)
 {
     VkImageMemoryBarrier ImageMemoryBarrier = {};
