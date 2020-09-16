@@ -1,7 +1,6 @@
 #include "ctk/ctk_new.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
-#define VTK_UNSET_INDEX CTK_U32_MAX
 #define VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNC_NAME) \
     auto FUNC_NAME = (PFN_ ## FUNC_NAME)vkGetInstanceProcAddr(INSTANCE, #FUNC_NAME); \
     if (FUNC_NAME == NULL) \
@@ -416,7 +415,7 @@ struct vtk_region {
 static VkDeviceMemory vtk_allocate_device_memory(struct vtk_device *device, VkMemoryRequirements *mem_reqs,
                                                  VkMemoryPropertyFlags mem_prop_flags) {
     // Find memory type index from device based on memory property flags.
-    u32 selected_mem_type_idx = VTK_UNSET_INDEX;
+    u32 selected_mem_type_idx = CTK_U32_MAX;
     for (u32 mem_type_idx = 0; mem_type_idx < device->memory_properties.memoryTypeCount; ++mem_type_idx) {
         // Ensure index refers to memory type from memory requirements.
         if (!(mem_reqs->memoryTypeBits & (1 << mem_type_idx)))
@@ -428,7 +427,7 @@ static VkDeviceMemory vtk_allocate_device_memory(struct vtk_device *device, VkMe
             break;
         }
     }
-    if (selected_mem_type_idx == VTK_UNSET_INDEX)
+    if (selected_mem_type_idx == CTK_U32_MAX)
         CTK_FATAL("failed to find memory type that satisfies property requirements")
 
     // Allocate memory
@@ -649,7 +648,6 @@ struct vtk_render_pass {
     VkRenderPass handle;
     struct ctk_array<VkClearValue, 16> clear_values;
     struct ctk_array<VkFramebuffer, 4> framebuffers;
-    struct ctk_array<VkCommandBuffer, 4> command_buffers;
 };
 
 static VkFramebuffer vtk_create_framebuffer(VkDevice logical_device, VkRenderPass rp, struct vtk_framebuffer_info *info) {
@@ -696,17 +694,12 @@ static struct vtk_render_pass vtk_create_render_pass(VkDevice logical_device, Vk
     create_info.pSubpasses = subpass_descriptions.data;
     create_info.dependencyCount = info->subpass_dependencies.count;
     create_info.pDependencies = info->subpass_dependencies.data;
-    vtk_validate_result(vkCreateRenderPass(logical_device, &create_info, NULL, &rp.handle),
-                       "vkCreateRenderPass", "failed to create render pass");
+    vtk_validate_result(vkCreateRenderPass(logical_device, &create_info, NULL, &rp.handle), "failed to create render pass");
 
     // Framebuffers
     u32 framebuffer_count = info->framebuffer_infos.count;
     for (u32 i = 0; i < framebuffer_count; ++i)
         ctk_push(&rp.framebuffers, vtk_create_framebuffer(logical_device, rp.handle, info->framebuffer_infos + i));
-
-    // Command Buffers (1 per framebuffer)
-    rp.command_buffers.count = framebuffer_count;
-    vtk_allocate_command_buffers(logical_device, cmd_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, framebuffer_count, rp.command_buffers.data);
 
     return rp;
 }
