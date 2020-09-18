@@ -77,7 +77,7 @@ static void vtk_validate_result(VkResult result, cstr fail_msg, _args... args) {
 template<typename vk_object, u32 size, typename _loader, typename ..._args>
 static void vtk_load_vk_objects(struct ctk_array<vk_object, size> *arr, _loader loader, _args... args) {
     loader(args..., &arr->count, NULL);
-    CTK_ASSERT(arr->count < arr->size)
+    CTK_ASSERT(arr->count < size)
     loader(args..., &arr->count, arr->data);
 }
 
@@ -103,16 +103,6 @@ struct vtk_device {
     VkPhysicalDeviceProperties properties;
     VkPhysicalDeviceMemoryProperties memory_properties;
     VkFormat depth_image_format;
-};
-
-struct vtk_image_info {
-    u32 width;
-    u32 height;
-    VkFormat format;
-    VkImageTiling tiling;
-    VkImageUsageFlags usage_flags;
-    VkMemoryPropertyFlags memory_property_flags;
-    VkImageAspectFlags aspect_mask;
 };
 
 struct vtk_swapchain {
@@ -573,7 +563,7 @@ struct vtk_descriptor_set {
 static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count,
                                         VkDevice logical_device, VkDescriptorPool pool) {
     struct ctk_array<VkDescriptorSetLayout, 4> layouts = {};
-    CTK_ASSERT(instance_count < layouts.size)
+    CTK_ASSERT(instance_count < sizeof(layouts.data))
     CTK_REPEAT(instance_count)
         ctk_push(&layouts, layout);
 
@@ -705,35 +695,118 @@ static struct vtk_render_pass vtk_create_render_pass(VkDevice logical_device, Vk
 }
 
 ////////////////////////////////////////////////////////////
-/// Image
+/// Image / Texture
 ////////////////////////////////////////////////////////////
+struct vtk_image_info {
+    VkMemoryPropertyFlagBits memory_property_flags;
+    VkImageCreateInfo image;
+    VkImageViewCreateInfo view;
+};
+
+struct vtk_texture_info : public vtk_image_info {
+    VkSamplerCreateInfo sampler;
+};
+
 struct vtk_image {
     VkImage handle;
     VkDeviceMemory memory;
     VkImageView view;
 };
 
-static struct vtk_image vtk_create_image(struct vtk_device *device, struct vtk_image_info *info) {
-    struct vtk_image image = {};
+struct vtk_texture : public vtk_image {
+    VkSampler sampler;
+};
 
-    VkImageCreateInfo image_ci = {};
-    image_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_ci.flags = 0;
-    image_ci.imageType = VK_IMAGE_TYPE_2D;
-    image_ci.format = info->format;
-    image_ci.extent.width = info->width;
-    image_ci.extent.height = info->height;
-    image_ci.extent.depth = 1;
-    image_ci.mipLevels = 1;
-    image_ci.arrayLayers = 1;
-    image_ci.samples = VK_SAMPLE_COUNT_1_BIT;
-    image_ci.tiling = info->tiling;
-    image_ci.usage = info->usage_flags;
-    image_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    image_ci.queueFamilyIndexCount = 0;
-    image_ci.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
-    image_ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    vtk_validate_result(vkCreateImage(device->logical, &image_ci, NULL, &image.handle), "failed to create image");
+static struct vtk_image_info vtk_default_image_info() {
+    struct vtk_image_info info = {};
+    info.image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.image.flags = 0;
+    info.image.imageType = VK_IMAGE_TYPE_2D;
+    info.image.format = VK_FORMAT_UNDEFINED;
+    info.image.extent.width = 0;
+    info.image.extent.height = 0;
+    info.image.extent.depth = 1;
+    info.image.mipLevels = 1;
+    info.image.arrayLayers = 1;
+    info.image.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.image.usage = 0;
+    info.image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.image.queueFamilyIndexCount = 0; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    info.image.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    info.image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    info.view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.view.flags = 0;
+    info.view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.view.format = VK_FORMAT_UNDEFINED;
+    info.view.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    info.view.subresourceRange.baseMipLevel = 0;
+    info.view.subresourceRange.levelCount = 1;
+    info.view.subresourceRange.baseArrayLayer = 0;
+    info.view.subresourceRange.layerCount = 1;
+    return info;
+}
+
+static struct vtk_texture_info vtk_default_texture_info() {
+    struct vtk_texture_info info = {};
+    info.image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.image.flags = 0;
+    info.image.imageType = VK_IMAGE_TYPE_2D;
+    info.image.format = VK_FORMAT_UNDEFINED;
+    info.image.extent.width = 0;
+    info.image.extent.height = 0;
+    info.image.extent.depth = 1;
+    info.image.mipLevels = 1;
+    info.image.arrayLayers = 1;
+    info.image.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.image.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.image.queueFamilyIndexCount = 0; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    info.image.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    info.image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    info.view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    info.view.flags = 0;
+    info.view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    info.view.format = VK_FORMAT_UNDEFINED;
+    info.view.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    info.view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    info.view.subresourceRange.baseMipLevel = 0;
+    info.view.subresourceRange.levelCount = 1;
+    info.view.subresourceRange.baseArrayLayer = 0;
+    info.view.subresourceRange.layerCount = 1;
+
+    info.sampler.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.sampler.magFilter = VK_FILTER_LINEAR;
+    info.sampler.minFilter = VK_FILTER_LINEAR;
+    info.sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    info.sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    info.sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    info.sampler.anisotropyEnable = VK_TRUE;
+    info.sampler.maxAnisotropy = 16;
+    info.sampler.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    info.sampler.unnormalizedCoordinates = VK_FALSE;
+    info.sampler.compareEnable = VK_FALSE;
+    info.sampler.compareOp = VK_COMPARE_OP_ALWAYS;
+    info.sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    info.sampler.mipLodBias = 0.0f;
+    info.sampler.minLod = 0.0f;
+    info.sampler.maxLod = 0.0f;
+    return info;
+}
+
+static struct vtk_image vtk_create_image(struct vtk_image_info *info, struct vtk_device *device) {
+    struct vtk_image image = {};
+    vtk_validate_result(vkCreateImage(device->logical, &info->image, NULL, &image.handle), "failed to create image");
 
     // Allocate / Bind Memory
     VkMemoryRequirements mem_reqs = {};
@@ -741,24 +814,26 @@ static struct vtk_image vtk_create_image(struct vtk_device *device, struct vtk_i
     image.memory = vtk_allocate_device_memory(device, &mem_reqs, info->memory_property_flags);
     vtk_validate_result(vkBindImageMemory(device->logical, image.handle, image.memory, 0), "failed to bind image memory");
 
-    VkImageViewCreateInfo view_ci = {};
-    view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_ci.image = image.handle;
-    view_ci.flags = 0;
-    view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_ci.format = info->format;
-    view_ci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    view_ci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    view_ci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    view_ci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    view_ci.subresourceRange.aspectMask = info->aspect_mask;
-    view_ci.subresourceRange.baseMipLevel = 0;
-    view_ci.subresourceRange.levelCount = 1;
-    view_ci.subresourceRange.baseArrayLayer = 0;
-    view_ci.subresourceRange.layerCount = 1;
-    vtk_validate_result(vkCreateImageView(device->logical, &view_ci, NULL, &image.view), "failed to create image view");
+    info->view.image = image.handle;
+    vtk_validate_result(vkCreateImageView(device->logical, &info->view, NULL, &image.view), "failed to create image view");
 
     return image;
+}
+
+static struct vtk_texture vtk_create_texture(struct vtk_texture_info *info, struct vtk_device *device) {
+    struct vtk_texture tex = {};
+    vtk_validate_result(vkCreateImage(device->logical, &info->image, NULL, &tex.handle), "failed to create image");
+
+    // Allocate / Bind Memory
+    VkMemoryRequirements mem_reqs = {};
+    vkGetImageMemoryRequirements(device->logical, tex.handle, &mem_reqs);
+    tex.memory = vtk_allocate_device_memory(device, &mem_reqs, info->memory_property_flags);
+    vtk_validate_result(vkBindImageMemory(device->logical, tex.handle, tex.memory, 0), "failed to bind image memory");
+
+    info->view.image = tex.handle;
+    vtk_validate_result(vkCreateImageView(device->logical, &info->view, NULL, &tex.view), "failed to create image view");
+    vtk_validate_result(vkCreateSampler(device->logical, &info->sampler, NULL, &tex.sampler), "failed to create texture sampler");
+    return tex;
 }
 
 ////////////////////////////////////////////////////////////
