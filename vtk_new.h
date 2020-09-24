@@ -562,7 +562,8 @@ struct vtk_descriptor_set {
 
 struct vtk_descriptor_set_binding {
     struct vtk_descriptor_set *set;
-    struct ctk_array<u32, 8> dynamic_offset_indexes;
+    u32 dynamic_offset_indexes[8];
+    u32 instance_index;
 };
 
 static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count,
@@ -580,14 +581,13 @@ static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescri
     vtk_validate_result(vkAllocateDescriptorSets(logical_device, &alloc_info, set->instances.data), "failed to allocate descriptor sets");
 }
 
-static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, struct vtk_descriptor_set_binding *bindings, u32 binding_count, u32 first_set_idx,
-                                     u32 instance_idx = 0) {
+static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, u32 first_set_idx, struct vtk_descriptor_set_binding *bindings, u32 binding_count) {
     struct ctk_array<VkDescriptorSet, 4> sets = {};
     struct ctk_array<u32, 16> dynamic_offsets = {};
     for (u32 binding_idx = 0; binding_idx < binding_count; ++binding_idx) {
         struct vtk_descriptor_set_binding *binding = bindings + binding_idx;
         struct vtk_descriptor_set *set = binding->set;
-        ctk_push(&sets, set->instances[instance_idx]);
+        ctk_push(&sets, set->instances[binding->instance_index]);
         for (u32 i = 0; i < set->dynamic_offsets.count; ++i)
             ctk_push(&dynamic_offsets, set->dynamic_offsets[i] * binding->dynamic_offset_indexes[i]);
     }
