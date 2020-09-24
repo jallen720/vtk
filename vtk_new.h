@@ -560,6 +560,11 @@ struct vtk_descriptor_set {
     struct ctk_array<u32, 8> dynamic_offsets;
 };
 
+struct vtk_descriptor_set_binding {
+    struct vtk_descriptor_set *set;
+    struct ctk_array<u32, 8> dynamic_offset_indexes;
+};
+
 static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count,
                                         VkDevice logical_device, VkDescriptorPool pool) {
     struct ctk_array<VkDescriptorSetLayout, 4> layouts = {};
@@ -575,18 +580,19 @@ static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescri
     vtk_validate_result(vkAllocateDescriptorSets(logical_device, &alloc_info, set->instances.data), "failed to allocate descriptor sets");
 }
 
-static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, struct vtk_descriptor_set **sets, u32 set_count,
-                                     u32 first_set_idx, u32 instance_idx = 0, u32 dynamic_idx = 0) {
-    struct ctk_array<VkDescriptorSet, 4> sets_to_bind = {};
+static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, struct vtk_descriptor_set_binding *bindings, u32 binding_count, u32 first_set_idx,
+                                     u32 instance_idx = 0) {
+    struct ctk_array<VkDescriptorSet, 4> sets = {};
     struct ctk_array<u32, 16> dynamic_offsets = {};
-    for (u32 set_idx = 0; set_idx < set_count; ++set_idx) {
-        struct vtk_descriptor_set *set = sets[set_idx];
-        ctk_push(&sets_to_bind, set->instances[instance_idx]);
-        for (u32 dynamic_offset_idx = 0; dynamic_offset_idx < set->dynamic_offsets.count; ++dynamic_offset_idx)
-            ctk_push(&dynamic_offsets, set->dynamic_offsets[dynamic_offset_idx] * dynamic_idx);
+    for (u32 binding_idx = 0; binding_idx < binding_count; ++binding_idx) {
+        struct vtk_descriptor_set_binding *binding = bindings + binding_idx;
+        struct vtk_descriptor_set *set = binding->set;
+        ctk_push(&sets, set->instances[instance_idx]);
+        for (u32 i = 0; i < set->dynamic_offsets.count; ++i)
+            ctk_push(&dynamic_offsets, set->dynamic_offsets[i] * binding->dynamic_offset_indexes[i]);
     }
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                            first_set_idx, sets_to_bind.count, sets_to_bind.data, // Sets to be bound to [first .. first + count]
+                            first_set_idx, sets.count, sets.data,
                             dynamic_offsets.count, dynamic_offsets.data);
 }
 
