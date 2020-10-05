@@ -113,8 +113,7 @@ struct vtk_swapchain {
     VkExtent2D extent;
 };
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
-                                                     VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit, VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
                                                      VkDebugUtilsMessengerCallbackDataEXT const *cb_data, void *user_data) {
     cstr msg_id = cb_data->pMessageIdName ? cb_data->pMessageIdName : "";
     if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & msg_severity_flag_bit)
@@ -173,8 +172,7 @@ static struct vtk_instance vtk_create_instance() {
 
     // Create Debug Messenger
     VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance.handle, vkCreateDebugUtilsMessengerEXT)
-    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL, &instance.debug_messenger),
-                        "failed to create debug messenger");
+    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL, &instance.debug_messenger), "failed to create debug messenger");
 
     return instance;
 }
@@ -274,7 +272,7 @@ static struct vtk_swapchain vtk_create_swapchain(struct vtk_device *device, VkSu
     ////////////////////////////////////////////////////////////
 
     // Configure swapchain based on surface properties.
-    struct ctk_array<VkSurfaceFormatKHR, 16> surface_fmts = {};
+    struct ctk_array<VkSurfaceFormatKHR, 32> surface_fmts = {};
     struct ctk_array<VkPresentModeKHR, 8> surface_present_modes = {};
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
     vtk_load_vk_objects(&surface_fmts, vkGetPhysicalDeviceSurfaceFormatsKHR, device->physical, surface);
@@ -402,8 +400,7 @@ struct vtk_region {
     VkDeviceSize offset;
 };
 
-static VkDeviceMemory vtk_allocate_device_memory(struct vtk_device *device, VkMemoryRequirements *mem_reqs,
-                                                 VkMemoryPropertyFlags mem_prop_flags) {
+static VkDeviceMemory vtk_allocate_device_memory(struct vtk_device *device, VkMemoryRequirements *mem_reqs, VkMemoryPropertyFlags mem_prop_flags) {
     // Find memory type index from device based on memory property flags.
     u32 selected_mem_type_idx = CTK_U32_MAX;
     for (u32 mem_type_idx = 0; mem_type_idx < device->memory_properties.memoryTypeCount; ++mem_type_idx) {
@@ -457,29 +454,24 @@ static struct vtk_region vtk_allocate_region(struct vtk_buffer *buf, u32 size, V
     region.buffer = buf;
     VkDeviceSize align_offset = buf->end % align;
     region.offset = align_offset ? buf->end - align_offset + align : buf->end;
-    if (region.offset + size > buf->size) {
-        CTK_FATAL("buf (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)",
-                  buf->size, buf->end, size, align, buf->size - buf->end);
-    }
+    if (region.offset + size > buf->size)
+        CTK_FATAL("buf (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)", buf->size, buf->end, size, align, buf->size - buf->end);
     region.size = size;
     buf->end = region.offset + region.size;
     return region;
 }
 
-static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDeviceSize size,
-                                     struct vtk_region *region, VkDeviceSize region_offset) {
+static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDeviceSize size, struct vtk_region *region, VkDeviceSize region_offset) {
     if (region_offset + size > region->size)
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", size, region_offset, region->size);
     void *mem = NULL;
-    vtk_validate_result(vkMapMemory(logical_device, region->buffer->memory, region->offset + region_offset, size, 0, &mem),
-                        "failed to map host coherent buffer region to memory");
+    vtk_validate_result(vkMapMemory(logical_device, region->buffer->memory, region->offset + region_offset, size, 0, &mem), "failed to map host coherent buffer region to memory");
     memcpy(mem, data, size);
     vkUnmapMemory(logical_device, region->buffer->memory);
 }
 
-static void vtk_write_to_device_region(struct vtk_device *device, VkCommandBuffer cmd_buf, void *data, VkDeviceSize size,
-                                       struct vtk_region *staging_region, VkDeviceSize staging_region_offset,
-                                       struct vtk_region *region, VkDeviceSize region_offset) {
+static void vtk_write_to_device_region(struct vtk_device *device, VkCommandBuffer cmd_buf, void *data, VkDeviceSize size, struct vtk_region *staging_region,
+                                       VkDeviceSize staging_region_offset, struct vtk_region *region, VkDeviceSize region_offset) {
     if (region_offset + size > region->size)
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", size, region_offset, region->size);
     vtk_write_to_host_region(device->logical, data, size, staging_region, staging_region_offset);
@@ -508,8 +500,7 @@ static struct vtk_shader vtk_create_shader(VkDevice logical_device, cstr spirv_p
     ShaderModuleCreateInfo.flags = 0;
     ShaderModuleCreateInfo.codeSize = ctk_byte_size(&byte_code);
     ShaderModuleCreateInfo.pCode = (u32 const *)byte_code.data;
-    vtk_validate_result(vkCreateShaderModule(logical_device, &ShaderModuleCreateInfo, NULL, &shader.handle),
-                        "failed to create shader from SPIR-V bytecode in \"%p\"", spirv_path);
+    vtk_validate_result(vkCreateShaderModule(logical_device, &ShaderModuleCreateInfo, NULL, &shader.handle), "failed to create shader from SPIR-V bytecode in \"%p\"", spirv_path);
 
     ctk_free(&byte_code);
     return shader;
@@ -518,8 +509,7 @@ static struct vtk_shader vtk_create_shader(VkDevice logical_device, cstr spirv_p
 ////////////////////////////////////////////////////////////
 /// Command Buffer
 ////////////////////////////////////////////////////////////
-static void vtk_allocate_command_buffers(VkDevice logical_device, VkCommandPool cmd_pool, VkCommandBufferLevel level,
-                                         u32 count, VkCommandBuffer *cmd_bufs) {
+static void vtk_allocate_command_buffers(VkDevice logical_device, VkCommandPool cmd_pool, VkCommandBufferLevel level, u32 count, VkCommandBuffer *cmd_bufs) {
     VkCommandBufferAllocateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     info.commandPool = cmd_pool;
@@ -566,8 +556,7 @@ struct vtk_descriptor_set_binding {
     u32 instance_index;
 };
 
-static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count,
-                                        VkDevice logical_device, VkDescriptorPool pool) {
+static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count, VkDevice logical_device, VkDescriptorPool pool) {
     struct ctk_array<VkDescriptorSetLayout, 4> layouts = {};
     CTK_ASSERT(instance_count < sizeof(layouts.data))
     CTK_REPEAT(instance_count)
@@ -604,15 +593,12 @@ struct vtk_uniform_buffer {
     u32 element_size;
 };
 
-static struct vtk_uniform_buffer vtk_create_uniform_buffer(struct vtk_buffer *buf, struct vtk_device *device, VkDeviceSize elem_count,
-                                                           VkDeviceSize elem_size, u32 instance_count) {
+static struct vtk_uniform_buffer vtk_create_uniform_buffer(struct vtk_buffer *buf, struct vtk_device *device, VkDeviceSize elem_count, VkDeviceSize elem_size, u32 instance_count) {
     CTK_ASSERT(instance_count > 0)
     struct vtk_uniform_buffer uniform_buf = {};
     uniform_buf.element_size = elem_size;
-    CTK_REPEAT(instance_count) {
-        ctk_push(&uniform_buf.regions,
-                 vtk_allocate_region(buf, elem_count * elem_size, device->properties.limits.minUniformBufferOffsetAlignment));
-    }
+    CTK_REPEAT(instance_count)
+        ctk_push(&uniform_buf.regions, vtk_allocate_region(buf, elem_count * elem_size, device->properties.limits.minUniformBufferOffsetAlignment));
     return uniform_buf;
 }
 
@@ -974,8 +960,7 @@ static VkPipelineColorBlendAttachmentState vtk_default_color_blend_attachment_st
     return state;
 }
 
-static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_device, struct vtk_render_pass *rp, u32 subpass_index,
-                                                                 struct vtk_graphics_pipeline_info *info) {
+static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_device, struct vtk_render_pass *rp, u32 subpass_index, struct vtk_graphics_pipeline_info *info) {
     struct vtk_graphics_pipeline gp = {};
 
     // Shader Stages
@@ -1044,8 +1029,7 @@ static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logica
     create_info.subpass = subpass_index;
     create_info.basePipelineHandle = VK_NULL_HANDLE;
     create_info.basePipelineIndex = -1;
-    vtk_validate_result(vkCreateGraphicsPipelines(logical_device, VK_NULL_HANDLE, 1, &create_info, NULL, &gp.handle),
-                        "failed to create graphics pipeline");
+    vtk_validate_result(vkCreateGraphicsPipelines(logical_device, VK_NULL_HANDLE, 1, &create_info, NULL, &gp.handle), "failed to create graphics pipeline");
 
     return gp;
 }
