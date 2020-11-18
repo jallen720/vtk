@@ -113,8 +113,9 @@ struct vtk_swapchain {
     VkExtent2D extent;
 };
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit, VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
-                                                     VkDebugUtilsMessengerCallbackDataEXT const *cb_data, void *user_data) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
+                                                     VkDebugUtilsMessageTypeFlagsEXT msg_type_flags, VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
+                                                     void *user_data) {
     cstr msg_id = cb_data->pMessageIdName ? cb_data->pMessageIdName : "";
     if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & msg_severity_flag_bit)
         CTK_FATAL("VALIDATION LAYER [%s]: %s\n", msg_id, cb_data->pMessage)
@@ -172,7 +173,8 @@ static struct vtk_instance vtk_create_instance() {
 
     // Create Debug Messenger
     VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance.handle, vkCreateDebugUtilsMessengerEXT)
-    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL, &instance.debug_messenger), "failed to create debug messenger");
+    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL, &instance.debug_messenger),
+                        "failed to create debug messenger");
 
     return instance;
 }
@@ -454,8 +456,10 @@ static struct vtk_region vtk_allocate_region(struct vtk_buffer *buf, u32 size, V
     region.buffer = buf;
     VkDeviceSize align_offset = buf->end % align;
     region.offset = align_offset ? buf->end - align_offset + align : buf->end;
-    if (region.offset + size > buf->size)
-        CTK_FATAL("buf (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)", buf->size, buf->end, size, align, buf->size - buf->end);
+    if (region.offset + size > buf->size) {
+        CTK_FATAL("buf (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)", buf->size, buf->end, size, align,
+                  buf->size - buf->end);
+    }
     region.size = size;
     buf->end = region.offset + region.size;
     return region;
@@ -465,7 +469,8 @@ static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDevi
     if (region_offset + size > region->size)
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", size, region_offset, region->size);
     void *mem = NULL;
-    vtk_validate_result(vkMapMemory(logical_device, region->buffer->memory, region->offset + region_offset, size, 0, &mem), "failed to map host coherent buffer region to memory");
+    vtk_validate_result(vkMapMemory(logical_device, region->buffer->memory, region->offset + region_offset, size, 0, &mem),
+                        "failed to map host coherent buffer region to memory");
     memcpy(mem, data, size);
     vkUnmapMemory(logical_device, region->buffer->memory);
 }
@@ -495,12 +500,12 @@ static struct vtk_shader vtk_create_shader(VkDevice logical_device, cstr spirv_p
     shader.stage = stage;
     struct ctk_buffer<u8> byte_code = ctk_read_file<u8>(spirv_path);
 
-    VkShaderModuleCreateInfo ShaderModuleCreateInfo = {};
-    ShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    ShaderModuleCreateInfo.flags = 0;
-    ShaderModuleCreateInfo.codeSize = ctk_byte_size(&byte_code);
-    ShaderModuleCreateInfo.pCode = (u32 const *)byte_code.data;
-    vtk_validate_result(vkCreateShaderModule(logical_device, &ShaderModuleCreateInfo, NULL, &shader.handle), "failed to create shader from SPIR-V bytecode in \"%p\"", spirv_path);
+    VkShaderModuleCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.flags = 0;
+    info.codeSize = ctk_byte_size(&byte_code);
+    info.pCode = (u32 const *)byte_code.data;
+    vtk_validate_result(vkCreateShaderModule(logical_device, &info, NULL, &shader.handle), "failed to create shader from SPIR-V bytecode in \"%p\"", spirv_path);
 
     ctk_free(&byte_code);
     return shader;
@@ -556,7 +561,8 @@ struct vtk_descriptor_set_binding {
     u32 instance_index;
 };
 
-static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count, VkDevice logical_device, VkDescriptorPool pool) {
+static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count, VkDevice logical_device,
+                                        VkDescriptorPool pool) {
     struct ctk_array<VkDescriptorSetLayout, 4> layouts = {};
     CTK_ASSERT(instance_count < sizeof(layouts.data))
     CTK_REPEAT(instance_count)
@@ -570,7 +576,8 @@ static void vtk_allocate_descriptor_set(struct vtk_descriptor_set *set, VkDescri
     vtk_validate_result(vkAllocateDescriptorSets(logical_device, &alloc_info, set->instances.data), "failed to allocate descriptor sets");
 }
 
-static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, u32 first_set_idx, struct vtk_descriptor_set_binding *bindings, u32 binding_count) {
+static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, u32 first_set_idx, struct vtk_descriptor_set_binding *bindings,
+                                     u32 binding_count) {
     struct ctk_array<VkDescriptorSet, 4> sets = {};
     struct ctk_array<u32, 16> dynamic_offsets = {};
     for (u32 binding_idx = 0; binding_idx < binding_count; ++binding_idx) {
@@ -580,9 +587,7 @@ static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout l
         for (u32 i = 0; i < set->dynamic_offsets.count; ++i)
             ctk_push(&dynamic_offsets, set->dynamic_offsets[i] * binding->dynamic_offset_indexes[i]);
     }
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout,
-                            first_set_idx, sets.count, sets.data,
-                            dynamic_offsets.count, dynamic_offsets.data);
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, first_set_idx, sets.count, sets.data, dynamic_offsets.count, dynamic_offsets.data);
 }
 
 ////////////////////////////////////////////////////////////
@@ -593,7 +598,8 @@ struct vtk_uniform_buffer {
     u32 element_size;
 };
 
-static struct vtk_uniform_buffer vtk_create_uniform_buffer(struct vtk_buffer *buf, struct vtk_device *device, VkDeviceSize elem_count, VkDeviceSize elem_size, u32 instance_count) {
+static struct vtk_uniform_buffer vtk_create_uniform_buffer(struct vtk_buffer *buf, struct vtk_device *device, VkDeviceSize elem_count, VkDeviceSize elem_size,
+                                                           u32 instance_count) {
     CTK_ASSERT(instance_count > 0)
     struct vtk_uniform_buffer uniform_buf = {};
     uniform_buf.element_size = elem_size;
@@ -785,10 +791,10 @@ static struct vtk_texture_info vtk_default_texture_info() {
     info.sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     info.sampler.anisotropyEnable = VK_TRUE;
     info.sampler.maxAnisotropy = 16;
-    info.sampler.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    info.sampler.borderColor = VK_BORDER_COLOR_INT_OPAQUE_WHITE;
     info.sampler.unnormalizedCoordinates = VK_FALSE;
     info.sampler.compareEnable = VK_FALSE;
-    info.sampler.compareOp = VK_COMPARE_OP_ALWAYS;
+    info.sampler.compareOp = VK_COMPARE_OP_NEVER;
     info.sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     info.sampler.mipLodBias = 0.0f;
     info.sampler.minLod = 0.0f;
@@ -874,7 +880,7 @@ struct vtk_graphics_pipeline_info {
     struct ctk_array<VkVertexInputBindingDescription, 4> vertex_input_binding_descriptions;
     struct ctk_array<VkViewport, 4> viewports;
     struct ctk_array<VkRect2D, 4> scissors;
-    struct ctk_array<VkPipelineColorBlendAttachmentState, 4> color_blend_attachment_states;
+    struct ctk_array<VkPipelineColorBlendAttachmentState, 16> color_blend_attachment_states;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state;
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state;
@@ -960,7 +966,8 @@ static VkPipelineColorBlendAttachmentState vtk_default_color_blend_attachment_st
     return state;
 }
 
-static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_device, struct vtk_render_pass *rp, u32 subpass_index, struct vtk_graphics_pipeline_info *info) {
+static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_device, struct vtk_render_pass *rp, u32 subpass_index,
+                                                                 struct vtk_graphics_pipeline_info *info) {
     struct vtk_graphics_pipeline gp = {};
 
     // Shader Stages
