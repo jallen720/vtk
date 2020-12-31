@@ -881,6 +881,9 @@ struct vtk_graphics_pipeline_info {
     struct ctk_array<VkViewport, 4> viewports;
     struct ctk_array<VkRect2D, 4> scissors;
     struct ctk_array<VkPipelineColorBlendAttachmentState, 16> color_blend_attachment_states;
+    struct ctk_array<VkDynamicState, 16> dynamic_states;
+    u32 dynamic_viewport_count;
+    u32 dynamic_scissor_count;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state;
     VkPipelineDepthStencilStateCreateInfo depth_stencil_state;
@@ -949,7 +952,6 @@ static struct vtk_graphics_pipeline_info vtk_default_graphics_pipeline_info() {
     info.color_blend_state.blendConstants[1] = 1.0f;
     info.color_blend_state.blendConstants[2] = 1.0f;
     info.color_blend_state.blendConstants[3] = 1.0f;
-
     return info;
 }
 
@@ -1008,15 +1010,39 @@ static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logica
     vert_input_state.vertexAttributeDescriptionCount = vert_attrib_descs.count;
     vert_input_state.pVertexAttributeDescriptions = vert_attrib_descs.data;
 
+    // Viewport State
     VkPipelineViewportStateCreateInfo viewport_state = {};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = info->viewports.count;
-    viewport_state.pViewports = info->viewports.data;
-    viewport_state.scissorCount = info->scissors.count;
-    viewport_state.pScissors = info->scissors.data;
+    bool dynamic_viewport = false;
+    bool dynamic_scissor = false;
+    for (u32 i = 0; i < info->dynamic_states.count; ++i) {
+        if (info->dynamic_states[i] == VK_DYNAMIC_STATE_VIEWPORT)
+            dynamic_viewport = true;
+        if (info->dynamic_states[i] == VK_DYNAMIC_STATE_SCISSOR)
+            dynamic_scissor = true;
+    }
+    if (dynamic_viewport) {
+        viewport_state.viewportCount = 1;
+        viewport_state.pViewports = NULL;
+    } else {
+        viewport_state.viewportCount = info->viewports.count;
+        viewport_state.pViewports = info->viewports.data;
+    }
+    if (dynamic_scissor) {
+        viewport_state.scissorCount = 1;
+        viewport_state.pScissors = NULL;
+    } else {
+        viewport_state.scissorCount = info->scissors.count;
+        viewport_state.pScissors = info->scissors.data;
+    }
 
     info->color_blend_state.attachmentCount = info->color_blend_attachment_states.count;
     info->color_blend_state.pAttachments = info->color_blend_attachment_states.data;
+
+    VkPipelineDynamicStateCreateInfo dynamic_state = {};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = info->dynamic_states.count;
+    dynamic_state.pDynamicStates = info->dynamic_states.data;
 
     VkGraphicsPipelineCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1030,7 +1056,7 @@ static struct vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logica
     create_info.pMultisampleState = &info->multisample_state;
     create_info.pDepthStencilState = &info->depth_stencil_state;
     create_info.pColorBlendState = &info->color_blend_state;
-    create_info.pDynamicState = NULL;
+    create_info.pDynamicState = &dynamic_state;
     create_info.layout = gp.layout;
     create_info.renderPass = rp->handle;
     create_info.subpass = subpass_index;
