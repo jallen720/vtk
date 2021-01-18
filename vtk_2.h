@@ -1,3 +1,4 @@
+#include <vulkan/vulkan.h>
 #include "ctk/ctk_2.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
@@ -11,18 +12,18 @@
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
-struct vtk_vk_result_info {
+struct VTK_VkResultInfo {
     VkResult result;
     cstr name;
     cstr message;
 };
 
-struct vtk_instance {
+struct VTK_Instance {
     VkInstance handle;
     VkDebugUtilsMessengerEXT debug_messenger;
 };
 
-struct vtk_device {
+struct VTK_Device {
     VkPhysicalDevice physical;
     VkDevice logical;
     struct {
@@ -38,109 +39,129 @@ struct vtk_device {
     VkFormat depth_image_format;
 };
 
-struct vtk_swapchain {
+struct VTK_Swapchain {
     VkSwapchainKHR handle;
-    ctk_fixed_array<VkImageView, 4> image_views;
+    CTK_FixedArray<VkImageView, 4> image_views;
     u32 image_count;
     VkFormat image_format;
     VkExtent2D extent;
 };
 
-struct vtk_buffer_info {
+struct VTK_BufferInfo {
     VkDeviceSize size;
     VkBufferUsageFlags usage_flags;
     VkMemoryPropertyFlags memory_property_flags;
     VkSharingMode sharing_mode;
 };
 
-struct vtk_buffer {
+struct VTK_Buffer {
     VkBuffer handle;
     VkDeviceMemory memory;
     VkDeviceSize size;
     VkDeviceSize end;
 };
 
-struct vtk_region {
-    vtk_buffer *buffer;
+struct VTK_Region {
+    VTK_Buffer *buffer;
     VkDeviceSize size;
     VkDeviceSize offset;
 };
 
-struct vtk_shader {
+struct VTK_Shader {
     VkShaderModule handle;
     VkShaderStageFlagBits stage;
 };
 
-struct vtk_descriptor_set {
-    ctk_array<VkDescriptorSet, 4> instances;
-    ctk_array<u32, 8> dynamic_offsets;
+struct VTK_DescriptorSet {
+    CTK_Array<VkDescriptorSet, 4> instances;
+    CTK_Array<u32, 8> dynamic_offsets;
 };
 
-struct vtk_descriptor_set_binding {
-    vtk_descriptor_set *set;
+struct VTK_DescriptorSetBinding {
+    VTK_DescriptorSet *set;
     u32 dynamic_offset_indexes[8];
     u32 instance_index;
 };
 
-struct vtk_uniform_buffer {
-    ctk_fixed_array<vtk_region, 4> regions;
+struct VTK_UniformBuffer {
+    CTK_FixedArray<VTK_Region, 4> regions;
     u32 element_size;
 };
 
-struct vtk_subpass_info {
-    ctk_fixed_array<u32, 16> preserve_attachment_indexes;
-    ctk_fixed_array<VkAttachmentReference, 8> input_attachment_refs;
-    ctk_fixed_array<VkAttachmentReference, 8> color_attachment_refs;
+struct VTK_SubpassInfo {
+    CTK_FixedArray<u32, 16> preserve_attachment_indexes;
+    CTK_FixedArray<VkAttachmentReference, 8> input_attachment_refs;
+    CTK_FixedArray<VkAttachmentReference, 8> color_attachment_refs;
     ctk_optional<VkAttachmentReference> depth_attachment_ref;
 };
 
-struct vtk_framebuffer_info {
-    ctk_fixed_array<VkImageView, 16> attachments;
+struct VTK_FramebufferInfo {
+    CTK_FixedArray<VkImageView, 16> attachments;
     VkExtent2D extent;
     u32 layers;
 };
 
-struct vtk_render_pass_info {
-    ctk_fixed_array<VkAttachmentDescription, 16> attachment_descriptions;
-    ctk_fixed_array<vtk_subpass_info, 64> subpass_infos;
-    ctk_fixed_array<VkSubpassDependency, 64> subpass_dependencies;
-    ctk_fixed_array<vtk_framebuffer_info, 4> framebuffer_infos;
-    ctk_fixed_array<VkClearValue, 16> clear_values;
+struct VTK_RenderPassInfo {
+    CTK_FixedArray<VkAttachmentDescription, 16> attachment_descriptions;
+    CTK_FixedArray<VTK_SubpassInfo, 64> subpass_infos;
+    CTK_FixedArray<VkSubpassDependency, 64> subpass_dependencies;
+    CTK_FixedArray<VTK_FramebufferInfo, 4> framebuffer_infos;
+    CTK_FixedArray<VkClearValue, 16> clear_values;
 };
 
-struct vtk_render_pass {
+struct VTK_RenderPass {
     VkRenderPass handle;
-    ctk_fixed_array<VkClearValue, 16> clear_values;
-    ctk_fixed_array<VkFramebuffer, 4> framebuffers;
+    CTK_FixedArray<VkClearValue, 16> clear_values;
+    CTK_FixedArray<VkFramebuffer, 4> framebuffers;
 };
 
-struct vtk_vertex_atribute {
+struct VTK_ImageInfo {
+    VkMemoryPropertyFlagBits memory_property_flags;
+    VkImageCreateInfo image;
+    VkImageViewCreateInfo view;
+};
+
+struct VTK_TextureInfo : public VTK_ImageInfo {
+    VkSamplerCreateInfo sampler;
+};
+
+struct VTK_Image {
+    VkImage handle;
+    VkDeviceMemory memory;
+    VkImageView view;
+};
+
+struct VTK_Texture : public VTK_Image {
+    VkSampler sampler;
+};
+
+struct VTK_VertexAttribute {
     VkFormat format;
     u32 size;
     u32 offset;
 };
 
-struct vtk_vertex_layout {
-    ctk_fixed_map<vtk_vertex_atribute, 4, 64> attributes;
+struct VTK_VertexLayout {
+    ctk_fixed_map<VTK_VertexAttribute, 4, 64> attributes;
     u32 size;
 };
 
-struct vtk_vertex_input {
+struct VTK_VertexInput {
     u32 binding;
     u32 location;
-    vtk_vertex_atribute *attribute;
+    VTK_VertexAttribute *attribute;
 };
 
-struct vtk_graphics_pipeline_info {
-    ctk_fixed_array<vtk_shader *, 8> shaders;
-    ctk_fixed_array<VkDescriptorSetLayout, 8> descriptor_set_layouts;
-    ctk_fixed_array<VkPushConstantRange, 8> push_constant_ranges;
-    ctk_fixed_array<vtk_vertex_input, 8> vertex_inputs;
-    ctk_fixed_array<VkVertexInputBindingDescription, 4> vertex_input_binding_descriptions;
-    ctk_fixed_array<VkViewport, 4> viewports;
-    ctk_fixed_array<VkRect2D, 4> scissors;
-    ctk_fixed_array<VkPipelineColorBlendAttachmentState, 16> color_blend_attachment_states;
-    ctk_fixed_array<VkDynamicState, 16> dynamic_states;
+struct VTK_GraphicsPipelineInfo {
+    CTK_FixedArray<VTK_Shader *, 8> shaders;
+    CTK_FixedArray<VkDescriptorSetLayout, 8> descriptor_set_layouts;
+    CTK_FixedArray<VkPushConstantRange, 8> push_constant_ranges;
+    CTK_FixedArray<VTK_VertexInput, 8> vertex_inputs;
+    CTK_FixedArray<VkVertexInputBindingDescription, 4> vertex_input_binding_descriptions;
+    CTK_FixedArray<VkViewport, 4> viewports;
+    CTK_FixedArray<VkRect2D, 4> scissors;
+    CTK_FixedArray<VkPipelineColorBlendAttachmentState, 16> color_blend_attachment_states;
+    CTK_FixedArray<VkDynamicState, 16> dynamic_states;
     u32 dynamic_viewport_count;
     u32 dynamic_scissor_count;
 
@@ -152,7 +173,7 @@ struct vtk_graphics_pipeline_info {
     u32 subpass;
 };
 
-struct vtk_graphics_pipeline {
+struct VTK_GraphicsPipeline {
     VkPipeline handle;
     VkPipelineLayout layout;
 };
@@ -161,7 +182,7 @@ struct vtk_graphics_pipeline {
 /// Debugging
 ////////////////////////////////////////////////////////////
 static void vtk_log_result(VkResult result) {
-    static vtk_vk_result_info VK_RESULT_DEBUG_INFOS[] = {
+    static VTK_VkResultInfo VK_RESULT_DEBUG_INFOS[] = {
         { _VTK_VK_RESULT_NAME(VK_SUCCESS), "VULKAN SPEC ERROR MESSAGE: Command successfully completed." },
         { _VTK_VK_RESULT_NAME(VK_NOT_READY), "VULKAN SPEC ERROR MESSAGE: A fence or query has not yet completed." },
         { _VTK_VK_RESULT_NAME(VK_TIMEOUT), "VULKAN SPEC ERROR MESSAGE: A wait operation has not completed in the specified time." },
@@ -194,7 +215,7 @@ static void vtk_log_result(VkResult result) {
         { _VTK_VK_RESULT_NAME(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT), "VULKAN SPEC ERROR MESSAGE: An operation on a swapchain created with VK_FULL_SCREEN_EXCLUSIVE_APPLICATION_CONTROLLED_EXT failed as it did not have exlusive full-screen access. This may occur due to implementation-dependent reasons, outside of the application’s control." },
         // { _VTK_VK_RESULT_NAME(VK_ERROR_UNKNOWN), "VULKAN SPEC ERROR MESSAGE: An unknown error has occurred; either the application has provided invalid input, or an implementation failure has occurred." },
     };
-    vtk_vk_result_info *info = NULL;
+    VTK_VkResultInfo *info = NULL;
     for (u32 i = 0; i < CTK_ARRAY_COUNT(VK_RESULT_DEBUG_INFOS); ++i) {
         info = VK_RESULT_DEBUG_INFOS + i;
         if (info->result == result)
@@ -218,8 +239,8 @@ static void vtk_validate_result(VkResult result, cstr fail_msg, arg_types... arg
     }
 }
 
-template<typename vk_obj, u32 size, typename loader, typename ...arg_types>
-static void vtk_load_vk_objects(ctk_fixed_array<vk_obj, size> *arr, loader load_vk_objs, arg_types... args) {
+template<typename vk_object, u32 size, typename loader, typename ...arg_types>
+static void vtk_load_vk_objects(CTK_FixedArray<vk_object, size> *arr, loader load_vk_objs, arg_types... args) {
     load_vk_objs(args..., &arr->count, NULL);
     CTK_ASSERT(arr->count < size)
     load_vk_objs(args..., &arr->count, arr->data);
@@ -242,8 +263,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverity
     return VK_FALSE;
 }
 
-static vtk_instance vtk_create_instance() {
-    vtk_instance instance = {};
+static VTK_Instance vtk_create_instance(CTK_Array<cstr> *extensions, CTK_Array<cstr> *layers, CTK_Stack *stack) {
+    auto instance = ctk_alloc<VTK_Instance>(stack);
 
     VkDebugUtilsMessengerCreateInfoEXT debug_messenger_info = {};
     debug_messenger_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -269,28 +290,21 @@ static vtk_instance vtk_create_instance() {
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion = VK_API_VERSION_1_0;
 
-    ctk_fixed_array<cstr, 8> extensions = {};
-    ctk_fixed_array<cstr, 8> layers = {};
-    cstr *glfw_extensions = glfwGetRequiredInstanceExtensions(&extensions.count);
-    memcpy(extensions.data, glfw_extensions, ctk_byte_count(&extensions));
-    ctk_push(&extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    ctk_push(&layers, "VK_LAYER_LUNARG_standard_validation");
-
     VkInstanceCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     info.pNext = &debug_messenger_info;
     info.flags = 0;
     info.pApplicationInfo = &app_info;
-    info.enabledLayerCount = layers.count;
-    info.ppEnabledLayerNames = layers.data;
-    info.enabledExtensionCount = extensions.count;
-    info.ppEnabledExtensionNames = extensions.data;
-    vtk_validate_result(vkCreateInstance(&info, NULL, &instance.handle), "failed to create Vulkan instance");
+    info.enabledLayerCount = layers->count;
+    info.ppEnabledLayerNames = layers->data;
+    info.enabledExtensionCount = extensions->count;
+    info.ppEnabledExtensionNames = extensions->data;
+    vtk_validate_result(vkCreateInstance(&info, NULL, &instance->handle), "failed to create Vulkan instance");
 
     // Create Debug Messenger
-    VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance.handle, vkCreateDebugUtilsMessengerEXT)
-    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL,
-                                                       &instance.debug_messenger),
+    VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance->handle, vkCreateDebugUtilsMessengerEXT)
+    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance->handle, &debug_messenger_info, NULL,
+                                                       &instance->debug_messenger),
                         "failed to create debug messenger");
 
     return instance;
@@ -328,18 +342,18 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
 }
 
-static vtk_device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, VkPhysicalDeviceFeatures *features) {
-    vtk_device device = {};
+static VTK_Device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, VkPhysicalDeviceFeatures *features) {
+    VTK_Device device = {};
 
     ////////////////////////////////////////////////////////////
     /// Physical
     ////////////////////////////////////////////////////////////
-    ctk_fixed_array<VkPhysicalDevice, 8> phys_devices = {};
+    CTK_FixedArray<VkPhysicalDevice, 8> phys_devices = {};
     vtk_load_vk_objects(&phys_devices, vkEnumeratePhysicalDevices, instance);
     device.physical = phys_devices[0];
 
     // Find queue family indexes.
-    ctk_fixed_array<VkQueueFamilyProperties, 8> q_family_props_arr = {};
+    CTK_FixedArray<VkQueueFamilyProperties, 8> q_family_props_arr = {};
     vtk_load_vk_objects(&q_family_props_arr, vkGetPhysicalDeviceQueueFamilyProperties, device.physical);
     for (u32 i = 0; i < q_family_props_arr.count; ++i) {
         VkQueueFamilyProperties *q_family_props = q_family_props_arr + i;
@@ -358,7 +372,7 @@ static vtk_device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, V
     ////////////////////////////////////////////////////////////
     /// Logical
     ////////////////////////////////////////////////////////////
-    ctk_fixed_array<VkDeviceQueueCreateInfo, 2> q_infos = {};
+    CTK_FixedArray<VkDeviceQueueCreateInfo, 2> q_infos = {};
     ctk_push(&q_infos, vtk_default_queue_info(device.queue_family_indexes.graphics));
     if (device.queue_family_indexes.present != device.queue_family_indexes.graphics)
         ctk_push(&q_infos, vtk_default_queue_info(device.queue_family_indexes.present));
@@ -384,16 +398,16 @@ static vtk_device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, V
     return device;
 }
 
-static vtk_swapchain vtk_create_swapchain(vtk_device *device, VkSurfaceKHR surface) {
-    vtk_swapchain swapchain = {};
+static VTK_Swapchain vtk_create_swapchain(VTK_Device *device, VkSurfaceKHR surface) {
+    VTK_Swapchain swapchain = {};
 
     ////////////////////////////////////////////////////////////
     /// Configuration
     ////////////////////////////////////////////////////////////
 
     // Configure swapchain based on surface properties.
-    ctk_fixed_array<VkSurfaceFormatKHR, 32> surface_fmts = {};
-    ctk_fixed_array<VkPresentModeKHR, 8> surface_present_modes = {};
+    CTK_FixedArray<VkSurfaceFormatKHR, 32> surface_fmts = {};
+    CTK_FixedArray<VkPresentModeKHR, 8> surface_present_modes = {};
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
     vtk_load_vk_objects(&surface_fmts, vkGetPhysicalDeviceSurfaceFormatsKHR, device->physical, surface);
     vtk_load_vk_objects(&surface_present_modes, vkGetPhysicalDeviceSurfacePresentModesKHR, device->physical, surface);
@@ -474,7 +488,7 @@ static vtk_swapchain vtk_create_swapchain(vtk_device *device, VkSurfaceKHR surfa
     ////////////////////////////////////////////////////////////
     /// Image View Creation
     ////////////////////////////////////////////////////////////
-    ctk_fixed_array<VkImage, 4> swapchain_images = {};
+    CTK_FixedArray<VkImage, 4> swapchain_images = {};
     vtk_load_vk_objects(&swapchain_images, vkGetSwapchainImagesKHR, device->logical, swapchain.handle);
     swapchain.image_count = swapchain_images.count;
     for (u32 i = 0; i < swapchain_images.count; ++i) {
@@ -503,7 +517,7 @@ static vtk_swapchain vtk_create_swapchain(vtk_device *device, VkSurfaceKHR surfa
 ////////////////////////////////////////////////////////////
 /// Memory
 ////////////////////////////////////////////////////////////
-static VkDeviceMemory vtk_allocate_device_memory(vtk_device *device, VkMemoryRequirements *mem_reqs,
+static VkDeviceMemory vtk_allocate_device_memory(VTK_Device *device, VkMemoryRequirements *mem_reqs,
                                                  VkMemoryPropertyFlags mem_prop_flags) {
     // Find memory type index from device based on memory property flags.
     u32 selected_mem_type_idx = CTK_U32_MAX;
@@ -531,8 +545,8 @@ static VkDeviceMemory vtk_allocate_device_memory(vtk_device *device, VkMemoryReq
     return mem;
 }
 
-static vtk_buffer vtk_create_buffer(vtk_device *device, vtk_buffer_info *buf_info) {
-    vtk_buffer buf = {};
+static VTK_Buffer vtk_create_buffer(VTK_Device *device, VTK_BufferInfo *buf_info) {
+    VTK_Buffer buf = {};
     buf.size = buf_info->size;
 
     VkBufferCreateInfo info = {};
@@ -553,8 +567,8 @@ static vtk_buffer vtk_create_buffer(vtk_device *device, vtk_buffer_info *buf_inf
     return buf;
 }
 
-static vtk_region vtk_allocate_region(vtk_buffer *buf, u32 size, VkDeviceSize align = 1) {
-    vtk_region region = {};
+static VTK_Region vtk_allocate_region(VTK_Buffer *buf, u32 size, VkDeviceSize align = 1) {
+    VTK_Region region = {};
     region.buffer = buf;
     VkDeviceSize align_offset = buf->end % align;
     region.offset = align_offset ? buf->end - align_offset + align : buf->end;
@@ -567,7 +581,7 @@ static vtk_region vtk_allocate_region(vtk_buffer *buf, u32 size, VkDeviceSize al
     return region;
 }
 
-static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDeviceSize size, vtk_region *region,
+static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDeviceSize size, VTK_Region *region,
                                      VkDeviceSize region_offset) {
     if (region_offset + size > region->size)
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", size, region_offset, region->size);
@@ -579,9 +593,9 @@ static void vtk_write_to_host_region(VkDevice logical_device, void *data, VkDevi
     vkUnmapMemory(logical_device, region->buffer->memory);
 }
 
-static void vtk_write_to_device_region(vtk_device *device, VkCommandBuffer cmd_buf, void *data, VkDeviceSize size,
-                                       vtk_region *staging_region, VkDeviceSize staging_region_offset,
-                                       vtk_region *region, VkDeviceSize region_offset) {
+static void vtk_write_to_device_region(VTK_Device *device, VkCommandBuffer cmd_buf, void *data, VkDeviceSize size,
+                                       VTK_Region *staging_region, VkDeviceSize staging_region_offset,
+                                       VTK_Region *region, VkDeviceSize region_offset) {
     if (region_offset + size > region->size)
         CTK_FATAL("cannot write %u bytes at offset %u into region (size=%u)", size, region_offset, region->size);
     vtk_write_to_host_region(device->logical, data, size, staging_region, staging_region_offset);
@@ -595,8 +609,8 @@ static void vtk_write_to_device_region(vtk_device *device, VkCommandBuffer cmd_b
 ////////////////////////////////////////////////////////////
 /// Shader
 ////////////////////////////////////////////////////////////
-static vtk_shader vtk_create_shader(VkDevice logical_device, cstr spirv_path, VkShaderStageFlagBits stage) {
-    vtk_shader shader = {};
+static VTK_Shader vtk_create_shader(VkDevice logical_device, cstr spirv_path, VkShaderStageFlagBits stage) {
+    VTK_Shader shader = {};
     shader.stage = stage;
     ctk_buffer<u8> byte_code = ctk_read_file<u8>(spirv_path);
 
@@ -654,9 +668,9 @@ static void vtk_submit_one_time_command_buffer(VkCommandBuffer cmd_buf, VkQueue 
 ////////////////////////////////////////////////////////////
 /// Descriptor Set
 ////////////////////////////////////////////////////////////
-static void vtk_allocate_descriptor_set(vtk_descriptor_set *set, VkDescriptorSetLayout layout, u32 instance_count,
+static void vtk_allocate_descriptor_set(VTK_DescriptorSet *set, VkDescriptorSetLayout layout, u32 instance_count,
                                         VkDevice logical_device, VkDescriptorPool pool) {
-    ctk_fixed_array<VkDescriptorSetLayout, 4> layouts = {};
+    CTK_FixedArray<VkDescriptorSetLayout, 4> layouts = {};
     CTK_ASSERT(instance_count < sizeof(layouts.data))
     CTK_REPEAT(instance_count)
         ctk_push(&layouts, layout);
@@ -671,12 +685,12 @@ static void vtk_allocate_descriptor_set(vtk_descriptor_set *set, VkDescriptorSet
 }
 
 static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout layout, u32 first_set_idx,
-                                     vtk_descriptor_set_binding *bindings, u32 binding_count) {
-    ctk_fixed_array<VkDescriptorSet, 4> sets = {};
-    ctk_fixed_array<u32, 16> dynamic_offsets = {};
+                                     VTK_DescriptorSetBinding *bindings, u32 binding_count) {
+    CTK_FixedArray<VkDescriptorSet, 4> sets = {};
+    CTK_FixedArray<u32, 16> dynamic_offsets = {};
     for (u32 binding_idx = 0; binding_idx < binding_count; ++binding_idx) {
-        vtk_descriptor_set_binding *binding = bindings + binding_idx;
-        vtk_descriptor_set *set = binding->set;
+        VTK_DescriptorSetBinding *binding = bindings + binding_idx;
+        VTK_DescriptorSet *set = binding->set;
         ctk_push(&sets, set->instances[binding->instance_index]);
         for (u32 i = 0; i < set->dynamic_offsets.count; ++i)
             ctk_push(&dynamic_offsets, set->dynamic_offsets[i] * binding->dynamic_offset_indexes[i]);
@@ -688,10 +702,10 @@ static void vtk_bind_descriptor_sets(VkCommandBuffer cmd_buf, VkPipelineLayout l
 ////////////////////////////////////////////////////////////
 /// Uniform Buffer
 ////////////////////////////////////////////////////////////
-static vtk_uniform_buffer vtk_create_uniform_buffer(vtk_buffer *buf, vtk_device *device, VkDeviceSize elem_count,
+static VTK_UniformBuffer vtk_create_uniform_buffer(VTK_Buffer *buf, VTK_Device *device, VkDeviceSize elem_count,
                                                    VkDeviceSize elem_size, u32 instance_count) {
     CTK_ASSERT(instance_count > 0)
-    vtk_uniform_buffer uniform_buf = {};
+    VTK_UniformBuffer uniform_buf = {};
     uniform_buf.element_size = elem_size;
     CTK_REPEAT(instance_count) {
         ctk_push(&uniform_buf.regions, vtk_allocate_region(buf, elem_count * elem_size,
@@ -703,7 +717,7 @@ static vtk_uniform_buffer vtk_create_uniform_buffer(vtk_buffer *buf, vtk_device 
 ////////////////////////////////////////////////////////////
 /// Render Pass
 ////////////////////////////////////////////////////////////
-static VkFramebuffer vtk_create_framebuffer(VkDevice logical_device, VkRenderPass rp, vtk_framebuffer_info *info) {
+static VkFramebuffer vtk_create_framebuffer(VkDevice logical_device, VkRenderPass rp, VTK_FramebufferInfo *info) {
     VkFramebufferCreateInfo create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     create_info.renderPass = rp;
@@ -717,15 +731,15 @@ static VkFramebuffer vtk_create_framebuffer(VkDevice logical_device, VkRenderPas
     return fb;
 }
 
-static vtk_render_pass vtk_create_render_pass(VkDevice logical_device, VkCommandPool cmd_pool, vtk_render_pass_info *info) {
-    vtk_render_pass rp = {};
+static VTK_RenderPass vtk_create_render_pass(VkDevice logical_device, VkCommandPool cmd_pool, VTK_RenderPassInfo *info) {
+    VTK_RenderPass rp = {};
 
     // Clear Values
     ctk_push(&rp.clear_values, info->clear_values.data, info->clear_values.count);
 
     // Subpass Descriptions
-    ctk_fixed_array<VkSubpassDescription, 64> subpass_descriptions = {};
-    CTK_EACH(vtk_subpass_info, subpass_info, info->subpass_infos) {
+    CTK_FixedArray<VkSubpassDescription, 64> subpass_descriptions = {};
+    CTK_EACH(VTK_SubpassInfo, subpass_info, info->subpass_infos) {
         VkSubpassDescription *description = ctk_push(&subpass_descriptions);
         description->pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         description->inputAttachmentCount = subpass_info->input_attachment_refs.count;
@@ -763,28 +777,8 @@ static vtk_render_pass vtk_create_render_pass(VkDevice logical_device, VkCommand
 ////////////////////////////////////////////////////////////
 /// Image / Texture
 ////////////////////////////////////////////////////////////
-vtk_image_info {
-    VkMemoryPropertyFlagBits memory_property_flags;
-    VkImageCreateInfo image;
-    VkImageViewCreateInfo view;
-};
-
-vtk_texture_info : public vtk_image_info {
-    VkSamplerCreateInfo sampler;
-};
-
-vtk_image {
-    VkImage handle;
-    VkDeviceMemory memory;
-    VkImageView view;
-};
-
-vtk_texture : public vtk_image {
-    VkSampler sampler;
-};
-
-static vtk_image_info vtk_default_image_info() {
-    vtk_image_info info = {};
+static VTK_ImageInfo vtk_default_image_info() {
+    VTK_ImageInfo info = {};
     info.image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     info.image.flags = 0;
     info.image.imageType = VK_IMAGE_TYPE_2D;
@@ -818,8 +812,8 @@ static vtk_image_info vtk_default_image_info() {
     return info;
 }
 
-static vtk_texture_info vtk_default_texture_info() {
-    vtk_texture_info info = {};
+static VTK_TextureInfo vtk_default_texture_info() {
+    VTK_TextureInfo info = {};
     info.image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     info.image.flags = 0;
     info.image.imageType = VK_IMAGE_TYPE_2D;
@@ -870,8 +864,8 @@ static vtk_texture_info vtk_default_texture_info() {
     return info;
 }
 
-static vtk_image vtk_create_image(vtk_image_info *info, vtk_device *device) {
-    vtk_image image = {};
+static VTK_Image vtk_create_image(VTK_ImageInfo *info, VTK_Device *device) {
+    VTK_Image image = {};
     vtk_validate_result(vkCreateImage(device->logical, &info->image, NULL, &image.handle), "failed to create image");
 
     // Allocate / Bind Memory
@@ -888,8 +882,8 @@ static vtk_image vtk_create_image(vtk_image_info *info, vtk_device *device) {
     return image;
 }
 
-static vtk_texture vtk_create_texture(vtk_texture_info *info, vtk_device *device) {
-    vtk_texture tex = {};
+static VTK_Texture vtk_create_texture(VTK_TextureInfo *info, VTK_Device *device) {
+    VTK_Texture tex = {};
     vtk_validate_result(vkCreateImage(device->logical, &info->image, NULL, &tex.handle), "failed to create image");
 
     // Allocate / Bind Memory
@@ -909,7 +903,7 @@ static vtk_texture vtk_create_texture(vtk_texture_info *info, vtk_device *device
 ////////////////////////////////////////////////////////////
 /// Vertex Layout
 ////////////////////////////////////////////////////////////
-static void vtk_push_vertex_attribute(vtk_vertex_layout *layout, cstr name, u32 elem_count) {
+static void vtk_push_vertex_attribute(VTK_VertexLayout *layout, cstr name, u32 elem_count) {
     static VkFormat const FORMATS[] = {
         VK_FORMAT_R32_SFLOAT,
         VK_FORMAT_R32G32_SFLOAT,
@@ -925,8 +919,8 @@ static void vtk_push_vertex_attribute(vtk_vertex_layout *layout, cstr name, u32 
 ////////////////////////////////////////////////////////////
 /// Graphics Pipeline
 ////////////////////////////////////////////////////////////
-static vtk_graphics_pipeline_info vtk_default_graphics_pipeline_info() {
-    vtk_graphics_pipeline_info info = {};
+static VTK_GraphicsPipelineInfo vtk_default_graphics_pipeline_info() {
+    VTK_GraphicsPipelineInfo info = {};
     info.input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     info.input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     info.input_assembly_state.primitiveRestartEnable = VK_FALSE;
@@ -995,14 +989,14 @@ static VkPipelineColorBlendAttachmentState vtk_default_color_blend_attachment_st
     return state;
 }
 
-static vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_device, vtk_render_pass *rp, u32 subpass_index,
-                                                         vtk_graphics_pipeline_info *info) {
-    vtk_graphics_pipeline gp = {};
+static VTK_GraphicsPipeline vtk_create_graphics_pipeline(VkDevice logical_device, VTK_RenderPass *rp, u32 subpass_index,
+                                                         VTK_GraphicsPipelineInfo *info) {
+    VTK_GraphicsPipeline gp = {};
 
     // Shader Stages
-    ctk_fixed_array<VkPipelineShaderStageCreateInfo, 4> shader_stages = {};
+    CTK_FixedArray<VkPipelineShaderStageCreateInfo, 4> shader_stages = {};
     for (u32 i = 0; i < info->shaders.count; ++i) {
-        vtk_shader *shader = info->shaders[i];
+        VTK_Shader *shader = info->shaders[i];
         VkPipelineShaderStageCreateInfo *shader_stage_ci = ctk_push(&shader_stages);
         shader_stage_ci->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stage_ci->flags = 0;
@@ -1022,8 +1016,8 @@ static vtk_graphics_pipeline vtk_create_graphics_pipeline(VkDevice logical_devic
                         "failed to create graphics pipeline layout");
 
     // Vertex Attribute Descriptions
-    ctk_fixed_array<VkVertexInputAttributeDescription, 4> vert_attrib_descs = {};
-    CTK_EACH(vtk_vertex_input, vert_input, info->vertex_inputs) {
+    CTK_FixedArray<VkVertexInputAttributeDescription, 4> vert_attrib_descs = {};
+    CTK_EACH(VTK_VertexInput, vert_input, info->vertex_inputs) {
         VkVertexInputAttributeDescription *attrib_desc = ctk_push(&vert_attrib_descs);
         attrib_desc->location = vert_input->location;
         attrib_desc->binding = vert_input->binding;
