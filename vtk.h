@@ -253,10 +253,10 @@ static void vtk_load_vk_objects(CTK_StaticArray<vk_object, size> *arr, loader lo
 ////////////////////////////////////////////////////////////
 /// Vulkan State
 ////////////////////////////////////////////////////////////
-static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
-                                                     VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
-                                                     VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
-                                                     void *user_data) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
+                                                         VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
+                                                         VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
+                                                         void *user_data) {
     cstr msg_id = cb_data->pMessageIdName ? cb_data->pMessageIdName : "";
 
     if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & msg_severity_flag_bit)
@@ -283,7 +283,7 @@ static VTK_Instance *vtk_create_instance(CTK_Array<cstr> *extensions, CTK_Array<
     debug_messenger_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    debug_messenger_info.pfnUserCallback = debug_callback;
+    debug_messenger_info.pfnUserCallback = vtk_debug_callback;
     debug_messenger_info.pUserData = NULL;
 
     // Create Instance
