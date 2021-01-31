@@ -2,11 +2,13 @@
 #include "ctk/ctk.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
-#define VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNC_NAME) \
-    auto FUNC_NAME = (PFN_ ## FUNC_NAME)vkGetInstanceProcAddr(INSTANCE, #FUNC_NAME); \
-    if (FUNC_NAME == NULL) \
+
+#define VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNC_NAME)\
+    auto FUNC_NAME = (PFN_ ## FUNC_NAME)vkGetInstanceProcAddr(INSTANCE, #FUNC_NAME);\
+    if (FUNC_NAME == NULL)\
         CTK_FATAL("failed to load instance extension function \"%s\"", #FUNC_NAME)
-#define VTK_COLOR_COMPONENT_RGBA \
+
+#define VTK_COLOR_COMPONENT_RGBA\
     VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
 ////////////////////////////////////////////////////////////
