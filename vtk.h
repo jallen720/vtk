@@ -269,8 +269,8 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vtk_debug_callback(VkDebugUtilsMessageSeve
     return VK_FALSE;
 }
 
-static VTK_Instance *vtk_create_instance(CTK_Array<cstr> *extensions, CTK_Array<cstr> *layers, CTK_Stack *stack) {
-    auto instance = ctk_alloc<VTK_Instance>(stack);
+static VTK_Instance vtk_create_instance(CTK_Array<cstr> *extensions, CTK_Array<cstr> *layers) {
+    VTK_Instance instance = {};
 
     VkDebugUtilsMessengerCreateInfoEXT debug_messenger_info = {};
     debug_messenger_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -305,12 +305,12 @@ static VTK_Instance *vtk_create_instance(CTK_Array<cstr> *extensions, CTK_Array<
     info.ppEnabledLayerNames = layers->data;
     info.enabledExtensionCount = extensions->count;
     info.ppEnabledExtensionNames = extensions->data;
-    vtk_validate_result(vkCreateInstance(&info, NULL, &instance->handle), "failed to create Vulkan instance");
+    vtk_validate_result(vkCreateInstance(&info, NULL, &instance.handle), "failed to create Vulkan instance");
 
     // Create Debug Messenger
-    VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance->handle, vkCreateDebugUtilsMessengerEXT)
-    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance->handle, &debug_messenger_info, NULL,
-                                                       &instance->debug_messenger),
+    VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(instance.handle, vkCreateDebugUtilsMessengerEXT)
+    vtk_validate_result(vkCreateDebugUtilsMessengerEXT(instance.handle, &debug_messenger_info, NULL,
+                                                       &instance.debug_messenger),
                         "failed to create debug messenger");
 
     return instance;
@@ -625,7 +625,7 @@ static void vtk_write_to_device_region(VTK_Device *device, VkCommandBuffer cmd_b
 static VTK_Shader vtk_create_shader(VkDevice logical_device, cstr spirv_path, VkShaderStageFlagBits stage) {
     VTK_Shader shader = {};
     shader.stage = stage;
-    ctk_buffer<u8> byte_code = ctk_read_file<u8>(spirv_path);
+    CTK_Array<u8> byte_code = ctk_read_file<u8>(spirv_path);
 
     VkShaderModuleCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

@@ -78,13 +78,11 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(dev_path)\lib;$(dev_path)\lib\VulkanSDK\1.1.130.0\Include;$(dev_path)\lib\glm;$(dev_path)\lib\glfw-3.3.1\include;$(dev_path)\pro;$(IncludePath)</IncludePath>
-    <LibraryPath>$(dev_path)\lib\VulkanSDK\1.1.130.0\Lib;$(dev_path)\lib\glfw-3.3.1\lib-vc2019;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(dev_path)\pro;$(dev_path)\lib\glfw-3.3.1\include;$(dev_path)\lib\glm;$(dev_path)\lib\VulkanSDK\1.2.162.1\Include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\Users\joela\dev\libs;C:\Users\joela\dev\libs\VulkanSDK\1.1.130.0\Include;C:\Users\joela\dev\libs\glm;C:\Users\joela\dev\libs\glfw-3.3.1\include;C:\Users\joela\dev\projects;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\joela\dev\libs\VulkanSDK\1.1.130.0\Lib;C:\Users\joela\dev\libs\glfw-3.3.1\lib-vc2019;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(dev_path)\pro;$(dev_path)\lib\glfw-3.3.1\include;$(dev_path)\lib\glm;$(dev_path)\lib\VulkanSDK\1.2.162.1\Include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -146,9 +144,6 @@
       <AdditionalDependencies>glfw3.lib;vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="test.cc" />
-  </ItemGroup>
   <ItemGroup>
     <ClInclude Include="vtk.h" />
   </ItemGroup>
