@@ -339,6 +339,7 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     };
     static VkFormatFeatureFlags const DEPTH_IMG_FMT_FEATS = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
+    // Find format that supports depth-stencil attachment feature for physical device.
     for (u32 i = 0; i < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); i++) {
         VkFormat depth_img_fmt = DEPTH_IMAGE_FORMATS[i];
         VkFormatProperties depth_img_fmt_props = {};
@@ -347,7 +348,7 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
             return depth_img_fmt;
     }
 
-    CTK_FATAL("failed to find format that satisfies feature requirements for depth image")
+    CTK_FATAL("failed to find format that supports depth-stencil attachment feature for physical device")
 }
 
 static VTK_Device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, VkPhysicalDeviceFeatures *features) {
@@ -363,15 +364,15 @@ static VTK_Device vtk_create_device(VkInstance instance, VkSurfaceKHR surface, V
     // Find queue family indexes.
     CTK_StaticArray<VkQueueFamilyProperties, 8> q_family_props_arr = {};
     vtk_load_vk_objects(&q_family_props_arr, vkGetPhysicalDeviceQueueFamilyProperties, device.physical);
-    for (u32 i = 0; i < q_family_props_arr.count; ++i) {
-        VkQueueFamilyProperties *q_family_props = q_family_props_arr + i;
+    for (u32 q_family_idx = 0; q_family_idx < q_family_props_arr.count; ++q_family_idx) {
+        VkQueueFamilyProperties *q_family_props = q_family_props_arr + q_family_idx;
         if (q_family_props->queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            device.queue_family_indexes.graphics = i;
+            device.queue_family_indexes.graphics = q_family_idx;
 
         VkBool32 present_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device.physical, i, surface, &present_supported);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device.physical, q_family_idx, surface, &present_supported);
         if (present_supported == VK_TRUE)
-            device.queue_family_indexes.present = i;
+            device.queue_family_indexes.present = q_family_idx;
     }
 
     vkGetPhysicalDeviceProperties(device.physical, &device.properties);
