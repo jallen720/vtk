@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vulkan/vulkan.h>
 #include "ctk/ctk.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
@@ -100,6 +101,16 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vtk_debug_callback(VkDebugUtilsMessageSeve
 ////////////////////////////////////////////////////////////
 /// Interface
 ////////////////////////////////////////////////////////////
+template<typename Object, typename Loader, typename ...Args>
+static CTK_Array<Object> vtk_load_vk_objects(CTK_Stack *stack, Loader loader, Args... args) {
+    u32 count = 0;
+    loader(args..., &count, NULL);
+    CTK_ASSERT(count > 0);
+    auto vk_objects = ctk_create_array_full<Object>(stack, count);
+    loader(args..., &vk_objects.count, vk_objects.data);
+    return vk_objects;
+}
+
 static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     static VkFormat const DEPTH_IMAGE_FORMATS[] = {
         VK_FORMAT_D32_SFLOAT_S8_UINT,
@@ -119,5 +130,18 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
             return depth_img_fmt;
     }
 
-    CTK_FATAL("failed to find format that supports depth-stencil attachment feature for physical device")
+    CTK_FATAL("failed to find physical device depth format that supports the depth-stencil attachment feature")
+}
+
+static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
+    static f32 const QUEUE_PRIORITIES[] = { 1.0f };
+
+    VkDeviceQueueCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    info.flags = 0;
+    info.queueFamilyIndex = queue_fam_idx;
+    info.queueCount = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
+    info.pQueuePriorities = QUEUE_PRIORITIES;
+
+    return info;
 }
