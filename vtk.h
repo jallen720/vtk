@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan.h>
 #include "ctk/ctk.h"
+#include "ctk/memory.h"
+#include "ctk/containers.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
 
