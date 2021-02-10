@@ -109,7 +109,7 @@ static CTK_Array<Object> vtk_load_vk_objects(CTK_Stack *stack, Loader loader, Ar
     loader(args..., &count, NULL);
     CTK_ASSERT(count > 0);
     auto vk_objects = ctk_create_array_full<Object>(stack, count);
-    loader(args..., &vk_objects.count, vk_objects.data.mem);
+    loader(args..., &vk_objects.count, vk_objects.data);
     return vk_objects;
 }
 
