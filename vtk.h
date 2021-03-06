@@ -21,6 +21,22 @@ struct VTK_VkResultInfo {
     cstr message;
 };
 
+struct VTK_BufferInfo {
+    VkDeviceSize size;
+    VkBufferUsageFlags usage_flags;
+    VkMemoryPropertyFlags memory_property_flags;
+    VkSharingMode sharing_mode;
+    VkDevice device;
+    VkPhysicalDeviceMemoryProperties memory_properties;
+};
+
+struct VTK_Buffer {
+    VkBuffer handle;
+    VkDeviceMemory memory;
+    VkDeviceSize size;
+    VkDeviceSize end;
+};
+
 ////////////////////////////////////////////////////////////
 /// Debugging
 ////////////////////////////////////////////////////////////
@@ -84,6 +100,7 @@ static void vtk_validate_result(VkResult result, cstr fail_msg, arg_types... arg
     }
 }
 
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
                                                          VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
                                                          VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
@@ -146,4 +163,26 @@ static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
     info.pQueuePriorities = QUEUE_PRIORITIES;
 
     return info;
+}
+
+static VTK_Buffer vtk_create_buffer(VTK_Device *device, VTK_BufferInfo *buf_info) {
+    VTK_Buffer buf = {};
+    buf.size = buf_info->size;
+
+    VkBufferCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = buf_info->size;
+    info.usage = buf_info->usage_flags;
+    info.sharingMode = buf_info->sharing_mode;
+    info.queueFamilyIndexCount = 0;
+    info.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
+    vtk_validate_result(vkCreateBuffer(device->logical, &info, NULL, &buf.handle), "failed to create buffer");
+
+    // Allocate / Bind Memory
+    VkMemoryRequirements mem_reqs = {};
+    vkGetBufferMemoryRequirements(device->logical, buf.handle, &mem_reqs);
+    buf.memory = vtk_allocate_device_memory(device, &mem_reqs, buf_info->memory_property_flags);
+    vtk_validate_result(vkBindBufferMemory(device->logical, buf.handle, buf.memory, 0), "failed to bind buffer memory");
+
+    return buf;
 }
