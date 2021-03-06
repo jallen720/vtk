@@ -65,7 +65,7 @@ enum {
     VTK_PHYSICAL_DEVICE_FEATURE_COUNT,
 };
 
-typedef CTK_StaticArray<s32, VTK_PHYSICAL_DEVICE_FEATURE_COUNT> VTK_PhysicalDeviceFeatures;
+typedef CTK_StaticArray<s32, VTK_PHYSICAL_DEVICE_FEATURE_COUNT> VTK_PhysicalDeviceFeatureArray;
 
 static cstr const _VTK_PHYSICAL_DEVICE_FEATURE_NAMES[] = {
     CTK_TO_CSTR(robustBufferAccess),
