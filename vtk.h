@@ -26,8 +26,6 @@ struct VTK_BufferInfo {
     VkBufferUsageFlags usage_flags;
     VkMemoryPropertyFlags memory_property_flags;
     VkSharingMode sharing_mode;
-    VkDevice device;
-    VkPhysicalDeviceMemoryProperties memory_properties;
 };
 
 struct VTK_Buffer {
@@ -165,7 +163,68 @@ static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
     return info;
 }
 
-static VTK_Buffer vtk_create_buffer(VTK_Device *device, VTK_BufferInfo *buf_info) {
+static u32 vtk_memory_type_index(VkPhysicalDeviceMemoryProperties mem_props, VkMemoryRequirements mem_reqs,
+                                 VkMemoryPropertyFlags mem_prop_flags) {
+    // Find memory type index from device based on memory property flags.
+    for (u32 mem_type_idx = 0; mem_type_idx < device->memory_properties.memoryTypeCount; ++mem_type_idx) {
+        // Ensure index refers to memory type from memory requirements.
+        if (!(mem_reqs->memoryTypeBits & (1 << mem_type_idx)))
+            continue;
+
+        // Check if memory at index has correct properties.
+        if ((device->memory_properties.memoryTypes[mem_type_idx].propertyFlags & mem_prop_flags) == mem_prop_flags)
+            return mem_type_idx;
+    }
+
+    CTK_FATAL("failed to find memory type that satisfies memory property requirements")
+}
+
+static VkDeviceMemory vtk_allocate_device_memory(VkDevice device, VkPhysicalDeviceMemoryProperties mem_props,
+                                                 VkMemoryRequirements mem_reqs, VkMemoryPropertyFlags mem_prop_flags) {
+    // Find memory type index from device based on memory property flags.
+    u32 selected_mem_type_idx = CTK_U32_MAX;
+    for (u32 mem_type_idx = 0; mem_type_idx < mem_props.memoryTypeCount; ++mem_type_idx) {
+        // Ensure index refers to memory type from memory requirements.
+        if (!(mem_reqs->memoryTypeBits & (1 << mem_type_idx)))
+            continue;
+
+        // Check if memory at index has correct properties.
+        if ((mem_props.memoryTypes[mem_type_idx].propertyFlags & mem_prop_flags) == mem_prop_flags) {
+            selected_mem_type_idx = mem_type_idx;
+            break;
+        }
+    }
+
+    if (selected_mem_type_idx == CTK_U32_MAX)
+        CTK_FATAL("failed to find memory type that satisfies property requirements")
+
+    // Allocate memory
+    VkMemoryAllocateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    info.allocationSize = mem_reqs->size;
+    info.memoryTypeIndex = selected_mem_type_idx;
+    VkDeviceMemory mem = VK_NULL_HANDLE;
+    vtk_validate_result(vkAllocateMemory(device, &info, NULL, &mem), "failed to allocate memory");
+    return mem;
+}
+
+struct VTK_Device {
+    VkPhysicalDevice physical;
+    QueueFamilyIndexes queue_fam_idxs;
+    VkPhysicalDeviceFeatures feats;
+    VkPhysicalDeviceProperties props;
+    VkPhysicalDeviceMemoryProperties mem_props;
+    VkFormat depth_img_fmt;
+
+    VkDevice logical;
+    struct {
+        VkQueue graphics;
+        VkQueue present;
+    } queues;
+};
+
+static VTK_Buffer vtk_create_buffer(VkDevice device, VkPhysicalDeviceMemoryProperties mem_props,
+                                    VTK_BufferInfo *buf_info) {
     VTK_Buffer buf = {};
     buf.size = buf_info->size;
 
@@ -176,13 +235,13 @@ static VTK_Buffer vtk_create_buffer(VTK_Device *device, VTK_BufferInfo *buf_info
     info.sharingMode = buf_info->sharing_mode;
     info.queueFamilyIndexCount = 0;
     info.pQueueFamilyIndices = NULL; // Ignored if sharingMode is not VK_SHARING_MODE_CONCURRENT.
-    vtk_validate_result(vkCreateBuffer(device->logical, &info, NULL, &buf.handle), "failed to create buffer");
+    vtk_validate_result(vkCreateBuffer(device, &info, NULL, &buf.handle), "failed to create buffer");
 
     // Allocate / Bind Memory
     VkMemoryRequirements mem_reqs = {};
-    vkGetBufferMemoryRequirements(device->logical, buf.handle, &mem_reqs);
-    buf.memory = vtk_allocate_device_memory(device, &mem_reqs, buf_info->memory_property_flags);
-    vtk_validate_result(vkBindBufferMemory(device->logical, buf.handle, buf.memory, 0), "failed to bind buffer memory");
+    vkGetBufferMemoryRequirements(device, buf.handle, &mem_reqs);
+    buf.memory = vtk_allocate_device_memory(device, mem_props, mem_reqs, buf_info->memory_property_flags);
+    vtk_validate_result(vkBindBufferMemory(device, buf.handle, buf.memory, 0), "failed to bind buffer memory");
 
     return buf;
 }
