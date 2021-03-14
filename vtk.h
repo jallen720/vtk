@@ -35,6 +35,12 @@ struct VTK_Buffer {
     VkDeviceSize end;
 };
 
+struct VTK_Region {
+    VTK_Buffer *buffer;
+    VkDeviceSize size;
+    VkDeviceSize offset;
+};
+
 ////////////////////////////////////////////////////////////
 /// Debugging
 ////////////////////////////////////////////////////////////
@@ -216,4 +222,59 @@ static VTK_Buffer vtk_create_buffer(VkDevice device, VkPhysicalDeviceMemoryPrope
     vtk_validate_result(vkBindBufferMemory(device, buf.handle, buf.memory, 0), "failed to bind buffer memory");
 
     return buf;
+}
+
+static VTK_Region vtk_allocate_region(VTK_Buffer *buf, u32 size, VkDeviceSize align = 1) {
+    VTK_Region region = {};
+    region.buffer = buf;
+    VkDeviceSize align_offset = buf->end % align;
+    region.offset = align_offset ? buf->end - align_offset + align : buf->end;
+
+    if (region.offset + size > buf->size) {
+        CTK_FATAL("buf (size=%u end=%u) cannot allocate region of size %u and alignment %u (only %u bytes left)",
+                  buf->size, buf->end, size, align, buf->size - buf->end);
+    }
+
+    region.size = size;
+    buf->end = region.offset + region.size;
+    return region;
+}
+
+////////////////////////////////////////////////////////////
+/// Command Buffer
+////////////////////////////////////////////////////////////
+static void vtk_allocate_command_buffers(VkDevice logical_device, VkCommandPool cmd_pool, VkCommandBufferLevel level,
+                                         u32 count, VkCommandBuffer *cmd_bufs) {
+    VkCommandBufferAllocateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.commandPool = cmd_pool;
+    info.level = level;
+    info.commandBufferCount = count;
+    vtk_validate_result(vkAllocateCommandBuffers(logical_device, &info, cmd_bufs), "failed to allocate command buffer");
+}
+
+static VkCommandBuffer vtk_allocate_command_buffer(VkDevice logical_device, VkCommandPool cmd_pool,
+                                                   VkCommandBufferLevel level) {
+    VkCommandBuffer cmd_buf = VK_NULL_HANDLE;
+    vtk_allocate_command_buffers(logical_device, cmd_pool, level, 1, &cmd_buf);
+    return cmd_buf;
+}
+
+static void vtk_begin_one_time_command_buffer(VkCommandBuffer cmd_buf) {
+    VkCommandBufferBeginInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    info.pInheritanceInfo = NULL;
+    vkBeginCommandBuffer(cmd_buf, &info);
+}
+
+static void vtk_submit_one_time_command_buffer(VkCommandBuffer cmd_buf, VkQueue queue) {
+    vkEndCommandBuffer(cmd_buf);
+    VkSubmitInfo submit_info = {};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &cmd_buf;
+    vtk_validate_result(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE),
+                        "failed to submit one-time command buffer");
+    vkQueueWaitIdle(queue);
 }
