@@ -82,7 +82,8 @@ static void vtk_log_result(VkResult result) {
 
     if (!info)
         CTK_FATAL("failed to find debug info for VkResult %d", result)
-    else if (info->result == 0)
+
+    if (info->result == 0)
         ctk_info("vulkan function returned %s: %s", info->name, info->message);
     else if (info->result > 0)
         ctk_warning("vulkan function returned %s: %s", info->name, info->message);
@@ -99,10 +100,12 @@ static void vtk_validate_result(VkResult result, cstr fail_msg, arg_types... arg
 }
 
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
-                                                         VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
-                                                         VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
-                                                         void *user_data) {
+static VKAPI_ATTR VkBool32 VKAPI_CALL
+vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
+                   VkDebugUtilsMessageTypeFlagsEXT msg_type_flags,
+                   VkDebugUtilsMessengerCallbackDataEXT const *cb_data,
+                   void *user_data)
+{
     cstr msg_id = cb_data->pMessageIdName ? cb_data->pMessageIdName : "";
 
     if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT & msg_severity_flag_bit)
@@ -168,7 +171,7 @@ static u32 vtk_memory_type_index(VkPhysicalDeviceMemoryProperties mem_props, VkM
     // Find memory type index from device based on memory property flags.
     for (u32 mem_type_idx = 0; mem_type_idx < device->memory_properties.memoryTypeCount; ++mem_type_idx) {
         // Ensure index refers to memory type from memory requirements.
-        if (!(mem_reqs->memoryTypeBits & (1 << mem_type_idx)))
+        if (!(mem_reqs.memoryTypeBits & (1 << mem_type_idx)))
             continue;
 
         // Check if memory at index has correct properties.
@@ -185,7 +188,7 @@ static VkDeviceMemory vtk_allocate_device_memory(VkDevice device, VkPhysicalDevi
     u32 selected_mem_type_idx = CTK_U32_MAX;
     for (u32 mem_type_idx = 0; mem_type_idx < mem_props.memoryTypeCount; ++mem_type_idx) {
         // Ensure index refers to memory type from memory requirements.
-        if (!(mem_reqs->memoryTypeBits & (1 << mem_type_idx)))
+        if (!(mem_reqs.memoryTypeBits & (1 << mem_type_idx)))
             continue;
 
         // Check if memory at index has correct properties.
@@ -201,27 +204,12 @@ static VkDeviceMemory vtk_allocate_device_memory(VkDevice device, VkPhysicalDevi
     // Allocate memory
     VkMemoryAllocateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    info.allocationSize = mem_reqs->size;
+    info.allocationSize = mem_reqs.size;
     info.memoryTypeIndex = selected_mem_type_idx;
     VkDeviceMemory mem = VK_NULL_HANDLE;
     vtk_validate_result(vkAllocateMemory(device, &info, NULL, &mem), "failed to allocate memory");
     return mem;
 }
-
-struct VTK_Device {
-    VkPhysicalDevice physical;
-    QueueFamilyIndexes queue_fam_idxs;
-    VkPhysicalDeviceFeatures feats;
-    VkPhysicalDeviceProperties props;
-    VkPhysicalDeviceMemoryProperties mem_props;
-    VkFormat depth_img_fmt;
-
-    VkDevice logical;
-    struct {
-        VkQueue graphics;
-        VkQueue present;
-    } queues;
-};
 
 static VTK_Buffer vtk_create_buffer(VkDevice device, VkPhysicalDeviceMemoryProperties mem_props,
                                     VTK_BufferInfo *buf_info) {
