@@ -122,12 +122,12 @@ vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity_flag_bit,
 /// Interface
 ////////////////////////////////////////////////////////////
 template<typename Object, typename Loader, typename ...Args>
-static CTK_Array<Object> vtk_load_vk_objects(CTK_Stack *stack, Loader loader, Args... args) {
+static CTK_Array<Object> *vtk_load_vk_objects(CTK_Allocator *allocator, Loader loader, Args... args) {
     u32 count = 0;
     loader(args..., &count, NULL);
     CTK_ASSERT(count > 0);
-    auto vk_objects = ctk_create_array_full<Object>(stack, count);
-    loader(args..., &vk_objects.count, vk_objects.data);
+    auto vk_objects = ctk_create_array_full<Object>(count, 0, allocator);
+    loader(args..., &vk_objects->count, vk_objects->data);
     return vk_objects;
 }
 
