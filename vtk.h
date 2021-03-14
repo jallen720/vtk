@@ -166,22 +166,6 @@ static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
     return info;
 }
 
-static u32 vtk_memory_type_index(VkPhysicalDeviceMemoryProperties mem_props, VkMemoryRequirements mem_reqs,
-                                 VkMemoryPropertyFlags mem_prop_flags) {
-    // Find memory type index from device based on memory property flags.
-    for (u32 mem_type_idx = 0; mem_type_idx < device->memory_properties.memoryTypeCount; ++mem_type_idx) {
-        // Ensure index refers to memory type from memory requirements.
-        if (!(mem_reqs.memoryTypeBits & (1 << mem_type_idx)))
-            continue;
-
-        // Check if memory at index has correct properties.
-        if ((device->memory_properties.memoryTypes[mem_type_idx].propertyFlags & mem_prop_flags) == mem_prop_flags)
-            return mem_type_idx;
-    }
-
-    CTK_FATAL("failed to find memory type that satisfies memory property requirements")
-}
-
 static VkDeviceMemory vtk_allocate_device_memory(VkDevice device, VkPhysicalDeviceMemoryProperties mem_props,
                                                  VkMemoryRequirements mem_reqs, VkMemoryPropertyFlags mem_prop_flags) {
     // Find memory type index from device based on memory property flags.
