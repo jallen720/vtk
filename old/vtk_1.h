@@ -1,4 +1,4 @@
-#include "ctk/ctk_new.h"
+#include "ctk/old/ctk_1.h"
 
 #define _VTK_VK_RESULT_NAME(VK_RESULT) VK_RESULT, #VK_RESULT
 #define VTK_LOAD_INSTANCE_EXTENSION_FUNCTION(INSTANCE, FUNC_NAME) \

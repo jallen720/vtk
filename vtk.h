@@ -97,8 +97,8 @@ static void vtk_log_result(VkResult result) {
         ctk_error("vulkan function returned %s: %s", info->name, info->message);
 }
 
-template<typename ...arg_types>
-static void vtk_validate_result(VkResult result, cstr fail_msg, arg_types... args) {
+template<typename ...Args>
+static void vtk_validate_result(VkResult result, cstr fail_msg, Args... args) {
     if (result != VK_SUCCESS) {
         vtk_log_result(result);
         CTK_FATAL(fail_msg, args...)
