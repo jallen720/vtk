@@ -15,7 +15,8 @@
 ////////////////////////////////////////////////////////////
 /// Data
 ////////////////////////////////////////////////////////////
-struct _VTK_VkResultInfo {
+struct _VTK_VkResultInfo
+{
     VkResult result;
     cstr name;
     cstr message;
@@ -24,8 +25,10 @@ struct _VTK_VkResultInfo {
 ////////////////////////////////////////////////////////////
 /// Debugging
 ////////////////////////////////////////////////////////////
-static void _vtk_print_result(VkResult result) {
-    static _VTK_VkResultInfo VK_RESULT_DEBUG_INFOS[] = {
+static void _vtk_print_result(VkResult result)
+{
+    static _VTK_VkResultInfo VK_RESULT_DEBUG_INFOS[] =
+    {
         { _VTK_VK_RESULT_NAME(VK_SUCCESS), "VULKAN SPEC ERROR MESSAGE: Command successfully completed." },
         { _VTK_VK_RESULT_NAME(VK_NOT_READY), "VULKAN SPEC ERROR MESSAGE: A fence or query has not yet completed." },
         { _VTK_VK_RESULT_NAME(VK_TIMEOUT), "VULKAN SPEC ERROR MESSAGE: A wait operation has not completed in the specified time." },
@@ -60,7 +63,8 @@ static void _vtk_print_result(VkResult result) {
     };
 
     _VTK_VkResultInfo *info = NULL;
-    for (u32 i = 0; i < CTK_ARRAY_COUNT(VK_RESULT_DEBUG_INFOS); ++i) {
+    for (u32 i = 0; i < CTK_ARRAY_COUNT(VK_RESULT_DEBUG_INFOS); ++i)
+    {
         info = VK_RESULT_DEBUG_INFOS + i;
         if (info->result == result)
             break;
@@ -78,8 +82,10 @@ static void _vtk_print_result(VkResult result) {
 }
 
 template<typename ...Args>
-static void vtk_validate_result(VkResult result, cstr fail_message, Args... args) {
-    if (result != VK_SUCCESS) {
+static void vtk_validate_result(VkResult result, cstr fail_message, Args... args)
+{
+    if (result != VK_SUCCESS)
+    {
         _vtk_print_result(result);
         CTK_FATAL(fail_message, args...)
     }
@@ -108,7 +114,8 @@ vtk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity_flag_
 /// Interface
 ////////////////////////////////////////////////////////////
 template<typename Object, typename Loader, typename ...Args>
-static CTK_Array<Object> *vtk_load_vk_objects(CTK_Allocator *allocator, Loader loader, Args... args) {
+static CTK_Array<Object> *vtk_load_vk_objects(CTK_Allocator *allocator, Loader loader, Args... args)
+{
     u32 count = 0;
     loader(args..., &count, NULL);
     CTK_ASSERT(count > 0);
@@ -117,8 +124,10 @@ static CTK_Array<Object> *vtk_load_vk_objects(CTK_Allocator *allocator, Loader l
     return vk_objects;
 }
 
-static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
-    static VkFormat const DEPTH_IMAGE_FORMATS[] = {
+static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device)
+{
+    static VkFormat const DEPTH_IMAGE_FORMATS[] =
+    {
         VK_FORMAT_D32_SFLOAT_S8_UINT,
         VK_FORMAT_D32_SFLOAT,
         VK_FORMAT_D24_UNORM_S8_UINT,
@@ -129,7 +138,8 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     static VkFormatFeatureFlags const DEPTH_IMG_FMT_FEATS = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     // Find format that supports depth-stencil attachment feature for physical device.
-    for (u32 i = 0; i < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); i++) {
+    for (u32 i = 0; i < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); i++)
+    {
         VkFormat depth_img_fmt = DEPTH_IMAGE_FORMATS[i];
         VkFormatProperties depth_img_fmt_props = {};
         vkGetPhysicalDeviceFormatProperties(physical_device, depth_img_fmt, &depth_img_fmt_props);
@@ -141,7 +151,8 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     CTK_FATAL("failed to find physical device depth format that supports the depth-stencil attachment feature")
 }
 
-static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
+static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx)
+{
     static f32 const QUEUE_PRIORITIES[] = { 1.0f };
 
     VkDeviceQueueCreateInfo info = {};
@@ -155,9 +166,11 @@ static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
 }
 
 static u32 vtk_find_memory_type_index(VkPhysicalDeviceMemoryProperties mem_props, VkMemoryRequirements mem_reqs,
-                                      VkMemoryPropertyFlags mem_prop_flags) {
+                                      VkMemoryPropertyFlags mem_prop_flags)
+{
     // Find memory type index from device based on memory property flags.
-    for (u32 mem_type_idx = 0; mem_type_idx < mem_props.memoryTypeCount; ++mem_type_idx) {
+    for (u32 mem_type_idx = 0; mem_type_idx < mem_props.memoryTypeCount; ++mem_type_idx)
+    {
         // Ensure index refers to memory type from memory requirements.
         if (!(mem_reqs.memoryTypeBits & (1 << mem_type_idx)))
             continue;
@@ -173,39 +186,42 @@ static u32 vtk_find_memory_type_index(VkPhysicalDeviceMemoryProperties mem_props
 ////////////////////////////////////////////////////////////
 /// Command Buffer
 ////////////////////////////////////////////////////////////
-static void vtk_allocate_cmd_buffers(VkDevice logical_device, VkCommandPool cmd_pool, VkCommandBufferLevel level,
-                                         u32 count, VkCommandBuffer *cmd_buffers) {
+static void vtk_allocate_command_buffers(VkDevice logical_device, VkCommandPool command_pool, VkCommandBufferLevel level,
+                                         u32 count, VkCommandBuffer *command_buffers)
+{
     VkCommandBufferAllocateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.commandPool = cmd_pool;
+    info.commandPool = command_pool;
     info.level = level;
     info.commandBufferCount = count;
-    vtk_validate_result(vkAllocateCommandBuffers(logical_device, &info, cmd_buffers),
+    vtk_validate_result(vkAllocateCommandBuffers(logical_device, &info, command_buffers),
                         "failed to allocate command buffer");
 }
 
-static VkCommandBuffer vtk_allocate_cmd_buffer(VkDevice logical_device, VkCommandPool cmd_pool,
-                                               VkCommandBufferLevel level) {
-    VkCommandBuffer cmd_buffer = VK_NULL_HANDLE;
-    vtk_allocate_cmd_buffers(logical_device, cmd_pool, level, 1, &cmd_buffer);
-    return cmd_buffer;
+static VkCommandBuffer vtk_allocate_command_buffer(VkDevice logical_device, VkCommandPool command_pool,
+                                                   VkCommandBufferLevel level)
+{
+    VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+    vtk_allocate_command_buffers(logical_device, command_pool, level, 1, &command_buffer);
+    return command_buffer;
 }
 
-static void vtk_begin_one_time_cmd_buffer(VkCommandBuffer cmd_buffer) {
+static void vtk_begin_temp_commands(VkCommandBuffer command_buffer)
+{
     VkCommandBufferBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     info.pInheritanceInfo = NULL;
-    vkBeginCommandBuffer(cmd_buffer, &info);
+    vkBeginCommandBuffer(command_buffer, &info);
 }
 
-static void vtk_submit_one_time_cmd_buffer(VkCommandBuffer cmd_buffer, VkQueue queue) {
-    vkEndCommandBuffer(cmd_buffer);
+static void vtk_submit_temp_commands(VkCommandBuffer command_buffer, VkQueue queue)
+{
+    vkEndCommandBuffer(command_buffer);
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &cmd_buffer;
-    vtk_validate_result(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE),
-                        "failed to submit one-time command buffer");
+    submit_info.pCommandBuffers = &command_buffer;
+    vtk_validate_result(vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE), "failed to submit temp command buffer");
     vkQueueWaitIdle(queue);
 }
