@@ -353,6 +353,7 @@ MigrationBackup/
 .ionide/
 
 # Custom
+*.swp
 *.spv
 *.sublime-*
 *.blend1

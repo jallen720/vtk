@@ -111,7 +111,7 @@ static CTK_Array<Object> *vtk_load_vk_objects(CTK_Allocator *allocator, Loader l
     u32 count = 0;
     loader(args..., &count, NULL);
     CTK_ASSERT(count > 0);
-    auto vk_objects = ctk_create_array_full<Object>(count, 0, allocator);
+    auto vk_objects = ctk_create_array_full<Object>(allocator, count, 0);
     loader(args..., &vk_objects->count, vk_objects->data);
     return vk_objects;
 }
