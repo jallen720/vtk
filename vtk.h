@@ -60,7 +60,7 @@ static void _vtk_print_result(VkResult result) {
     };
 
     _VTK_VkResultInfo *info = NULL;
-    for (u32 i = 0; i < CTK_ARRAY_COUNT(VK_RESULT_DEBUG_INFOS); ++i) {
+    for (u32 i = 0; i < CTK_ARRAY_SIZE(VK_RESULT_DEBUG_INFOS); ++i) {
         info = VK_RESULT_DEBUG_INFOS + i;
 
         if (info->result == result)
@@ -128,7 +128,7 @@ static VkFormat vtk_find_depth_image_format(VkPhysicalDevice physical_device) {
     static VkFormatFeatureFlags const DEPTH_IMG_FMT_FEATS = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     // Find format that supports depth-stencil attachment feature for physical device.
-    for (u32 i = 0; i < CTK_ARRAY_COUNT(DEPTH_IMAGE_FORMATS); i++) {
+    for (u32 i = 0; i < CTK_ARRAY_SIZE(DEPTH_IMAGE_FORMATS); i++) {
         VkFormat depth_img_fmt = DEPTH_IMAGE_FORMATS[i];
         VkFormatProperties depth_img_fmt_props = {};
         vkGetPhysicalDeviceFormatProperties(physical_device, depth_img_fmt, &depth_img_fmt_props);
@@ -147,7 +147,7 @@ static VkDeviceQueueCreateInfo vtk_default_queue_info(u32 queue_fam_idx) {
     info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
     info.flags = 0;
     info.queueFamilyIndex = queue_fam_idx;
-    info.queueCount = CTK_ARRAY_COUNT(QUEUE_PRIORITIES);
+    info.queueCount = CTK_ARRAY_SIZE(QUEUE_PRIORITIES);
     info.pQueuePriorities = QUEUE_PRIORITIES;
 
     return info;
